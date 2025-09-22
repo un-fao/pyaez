@@ -18,6 +18,7 @@ from rasterio.crs import CRS
 from rasterio.features import rasterize
 from rasterio.mask import mask
 from rasterio.warp import reproject, Resampling
+import matplotlib.pyplot as plt
 
 def get_UN_country(country_name, thr=3, return_gdf=False):
     """
