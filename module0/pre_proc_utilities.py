@@ -17,6 +17,7 @@ from rasterio.transform import from_bounds
 from rasterio.crs import CRS
 from rasterio.features import rasterize
 from rasterio.mask import mask
+from rasterio.warp import reproject, Resampling
 
 def get_UN_country(country_name, thr=3, return_gdf=False):
     """
