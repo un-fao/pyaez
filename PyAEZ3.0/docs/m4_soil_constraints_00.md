@@ -46,10 +46,10 @@ openpyxl (Excel writer)
 Tip (Windows/macOS): install geospatial stack via conda-forge, then pip for the rest. 
 
 ### Install (tip)                                          
-```bash```
+```bash
 conda install -c conda-forge geopandas rasterio shapely gdal proj 
 
-pip install pandas numpy matplotlib openpyxl
+pip install pandas numpy matplotlib openpyxl```
 
 ## Configuration
 
