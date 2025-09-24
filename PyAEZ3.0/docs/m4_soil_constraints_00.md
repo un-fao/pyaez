@@ -64,7 +64,7 @@ Tip (Windows/macOS): install geospatial stack via conda-forge, then pip for the 
 ### Install (tip)                                          
 ```bash
 conda install -c conda-forge geopandas rasterio shapely gdal proj
-pip install pandas numpy matplotlib openpyxl
+pip install pandas numpy matplotlib openpyxl```
 
 # PyAEZ v3.0 — Module 4: Soil Constraints (Part 1)      <!-- H1: one per page -->
 
@@ -95,5 +95,5 @@ Extract HWSD v2 SMUs for an AOI across D1–D7...
 ### Install (tip)                                          <!-- H3 -->
 ```bash
 conda install -c conda-forge geopandas rasterio shapely gdal proj
-pip install pandas numpy matplotlib openpyxl
+pip install pandas numpy matplotlib openpyxl```
 
