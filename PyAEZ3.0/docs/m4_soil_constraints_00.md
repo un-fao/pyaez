@@ -53,7 +53,7 @@ conda install -c conda-forge geopandas rasterio shapely gdal proj, pip install p
 
 Edit paths in the script under “User inputs”:
 
-`python`
+`python
 from pathlib import Path
 
 WORKING_DIR = Path(r"C:\...\PyAEZ\code\Soil_constraints")
@@ -64,5 +64,5 @@ SHAPE_PATH   = WORKING_DIR / "Ghana/Ghana.shp"          # your AOI
 OUT_TOPSOIL  = WORKING_DIR / "Top_Soil_Layers.xlsx"
 OUT_SUBSOIL  = WORKING_DIR / "Sub_Soil_Layers.xlsx"
 QC_RASTER_AOI_PNG = WORKING_DIR / "Raster_and_AOI_Boundary_Check.png"
-QC_CLIP_PNG       = WORKING_DIR / "Clipped_Raster_Check.png"
+QC_CLIP_PNG       = WORKING_DIR / "Clipped_Raster_Check.png"`
 
