@@ -122,21 +122,6 @@ Map each numeric `TEXTURE_USDA` code (1–13) to its USDA texture class (the scr
 | 12   | Loamy sand         | 
 | 13   | Sand               | 
 
-### Code used in the script (Step 7)
-
-```python
-texture_lookup = pd.DataFrame({
-    "CODE": range(1, 14),
-    "VALUE": [
-        "Clay (heavy)", "Silty clay", "Clay (light)", "Silty clay loam",
-        "Clay loam", "Silt", "Silt loam", "Sandy clay", "Loam",
-        "Sandy clay loam", "Sandy loam", "Loamy sand", "Sand"
-    ]
-})
-soil_data = soil_data.merge(texture_lookup, left_on="TEXTURE_USDA", right_on="CODE", how="left")
-soil_data["TEXTURE_USDA"] = soil_data["VALUE"]
-soil_data.drop(columns=["CODE", "VALUE"], inplace=True)
-```
 
 ### 8) Transform flags
 
