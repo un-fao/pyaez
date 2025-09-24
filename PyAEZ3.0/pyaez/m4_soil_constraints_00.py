@@ -31,6 +31,7 @@ Outputs
 - Optional QC plots for raster/AOI overlay and clipped raster
 """
 
+# Dependencies (Imports)
 from pathlib import Path
 import os
 import rasterio
@@ -55,14 +56,13 @@ from openpyxl import Workbook
 # - openpyxl.Workbook: write multi-sheet Excel workbooks (Topsoil/Subsoil).
 
 
-
 # -----------------------------
 # User inputs (edit these only)
 # -----------------------------
 WORKING_DIR = Path(r"C:\Users\Asgharinia\OneDrive - Food and Agriculture Organization\Documents\PyAEZ\code\Soil_constraints")
 RASTER_PATH  = WORKING_DIR / "HWSD2_RASTER/HWSD2.bil"
 EXCEL_PATH   = WORKING_DIR / "HWSD2_LAYERS.xlsx"     # sheet: HWSD2_LAYERS
-SHAPE_PATH   = WORKING_DIR / "Ghana/Ghana.shp"
+SHAPE_PATH   = WORKING_DIR / "Ghana/Ghana.shp"  # e.g., AOI for Ghana 
 
 OUT_TOPSOIL  = WORKING_DIR / "Top_Soil_Layers.xlsx"
 OUT_SUBSOIL  = WORKING_DIR / "Sub_Soil_Layers.xlsx"
@@ -128,7 +128,6 @@ plt.close()
 
 # -----------------------------------------
 # Step 3: Extract unique SMUs inside AOI
-# (fast path—no big dataframe needed)
 # -----------------------------------------
 valid = clipped != raster_nodata
 unique_smu = np.unique(clipped[valid])
@@ -170,18 +169,13 @@ print("Texture descriptions assigned.")
 
 
 # -----------------------------------------
-# Step 7: (OSD removed in this version)
-# -----------------------------------------
-
-
-# -----------------------------------------
-# Step 8: Binary transform for ADD_PROP
+# Step 7: Binary transform for ADD_PROP
 # -----------------------------------------
 soil_data["ADD_PROP"] = (soil_data["ADD_PROP"] == 3).astype(int)
 
 
 # -----------------------------------------
-# Step 9: Reorder & rename columns
+# Step 8: Reorder & rename columns
 # -----------------------------------------
 column_order = [
     "HWSD2_SMU_ID", "TEXTURE_USDA", "ORG_CARBON", "PH_WATER", "TEB", "BSAT",
@@ -199,7 +193,7 @@ print("Columns reordered and renamed.")
 
 
 # -----------------------------------------
-# Step 10: Write Excel workbooks
+# Step 9: Write Excel workbooks
 # -----------------------------------------
 def create_soil_workbook(data: pd.DataFrame, layers: list[str], filename: Path) -> None:
     wb = Workbook()
