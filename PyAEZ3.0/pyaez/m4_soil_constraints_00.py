@@ -19,7 +19,7 @@ It prepares cleaned, layer-wise tables to feed subsequent Soil Constraints evalu
 Key updates (v3.0)
 1) Data source harmonized to the latest HWSD release:
    https://data.apps.fao.org/catalog/iso/ff5c613c-75bb-46a9-a162-bc728059b465
-2) Implements AOI-based SMU extraction for seven soil layers (D1–D7).
+2) Implements AOI-based SMU extraction for seven soil layers (D1–D7). soil layers: D1 (0-20 cm), D2 (20-40 cm), D3 (40-60 cm), D4 (60-80 cm), D5 (80-100 cm), D6 (100-150 cm), and D7 (150-200 cm) 
 
 Inputs
 - HWSD2 raster (BIL + sidecars)
