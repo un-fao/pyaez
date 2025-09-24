@@ -2,7 +2,7 @@
 
 Extract HWSD v2 Soil Mapping Units (SMUs) for a user-defined Area of Interest (AOI) across seven soil layers (D1–D7), clean attributes, and export ready-to-use layer tables for downstream Soil Constraints evaluation.
 
-** Authors / Credits**
+## Authors / Credits
 
 2016: N. Lakmal Deshapriya
 
@@ -16,7 +16,7 @@ Extract HWSD v2 Soil Mapping Units (SMUs) for a user-defined Area of Interest (A
 
 2025 (July): Shahla Asgharinia (FAO_NSLD)
 
-Summary
+## Summary
 
 This module clips the HWSD raster to your AOI, extracts unique SMUs, joins them to the HWSD attribute workbook, applies light cleaning/transformations, and writes Topsoil (D1–D3) and Subsoil (D4–D7) Excel workbooks. Optional QC images are saved for fast visual checks.
 
@@ -27,7 +27,7 @@ https://data.apps.fao.org/catalog/iso/ff5c613c-75bb-46a9-a162-bc728059b465
 
 AOI-based SMU extraction implemented for seven layers (D1–D7).
 
-Inputs
+## Inputs
 
 HWSD2 raster (HWSD2_RASTER/HWSD2.bil + sidecars .hdr/.prj/.stx)
 
@@ -35,7 +35,7 @@ AOI boundary (vector file with a defined CRS; e.g., Shapefile/GPKG/GeoJSON)
 
 HWSD attribute workbook (HWSD2_LAYERS.xlsx, sheet: HWSD2_LAYERS)
 
-Outputs
+## Outputs
 
 Top_Soil_Layers.xlsx (D1–D3)
 
@@ -45,7 +45,7 @@ Raster_and_AOI_Boundary_Check.png (optional QC)
 
 Clipped_Raster_Check.png (optional QC)
 
-Dependencies
+## Dependencies
 
 rasterio (raster IO, masking)
 
@@ -59,4 +59,9 @@ matplotlib (QC plots; Agg backend for headless)
 
 openpyxl (Excel writer)
 
-Tip (Windows/macOS): install geospatial stack via conda-forge, then pip for the rest.
+Tip (Windows/macOS): install geospatial stack via conda-forge, then pip for the rest. 
+
+### Install (tip)                                          
+```bash
+conda install -c conda-forge geopandas rasterio shapely gdal proj
+pip install pandas numpy matplotlib openpyxl
