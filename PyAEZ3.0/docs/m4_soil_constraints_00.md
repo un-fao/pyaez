@@ -160,18 +160,12 @@ Write two multi-sheet files:
 
 Each sheet contains the standardized columns for its layer.
 
-## How to run
-
-```bash
-python sc_00_prepare_inputs.py
-```
 
 ## Troubleshooting
 
 * Empty clip or very few SMUs: check CRS alignment and AOI validity. If needed, clean minor topology issues with `buffer(0)` and `dissolve()`.
 * NoData handling: if the source raster lacks nodata, the script uses `-9999`. Confirm downstream tools honor it.
 * Texture mapping: rows with `TEXTURE_USDA == 0` are dropped by design. Adjust Step 6 if you must retain them.
-
 
 
 
