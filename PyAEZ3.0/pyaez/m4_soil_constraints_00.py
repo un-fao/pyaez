@@ -27,7 +27,7 @@ Inputs
 - HWSD attribute workbook (Excel)
 
 Outputs
-- Cleaned per-layer tables for D1–D7 (e.g., Topsoil D1–D3, Subsoil D4–D7)
+- Cleaned per-layer tables for D1–D7 (e.g., Topsoil D1, Subsoil D2–D7)
 - Optional QC plots for raster/AOI overlay and clipped raster
 """
 
@@ -207,8 +207,8 @@ def create_soil_workbook(data: pd.DataFrame, layers: list[str], filename: Path) 
                 ws.append(list(row))
     wb.save(filename)
 
-top_layers = ["D1", "D2", "D3"]
-sub_layers = ["D4", "D5", "D6", "D7"]
+top_layers = ["D1"]
+sub_layers = ["D2", "D3", "D4", "D5", "D6", "D7"]
 create_soil_workbook(soil_data, top_layers, OUT_TOPSOIL)
 create_soil_workbook(soil_data, sub_layers, OUT_SUBSOIL)
 
