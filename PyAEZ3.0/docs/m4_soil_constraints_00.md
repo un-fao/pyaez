@@ -64,36 +64,20 @@ Tip (Windows/macOS): install geospatial stack via conda-forge, then pip for the 
 ### Install (tip)                                          
 ```bash
 conda install -c conda-forge geopandas rasterio shapely gdal proj
-pip install pandas numpy matplotlib openpyxl```
+pip install pandas numpy matplotlib openpyxl
 
-# PyAEZ v3.0 — Module 4: Soil Constraints (Part 1)      <!-- H1: one per page -->
+## Configuration
 
-## Authors / Credits                                       <!-- H2 -->
-- 2016: N. Lakmal Deshapriya
-- 2023: Swun Wunna Htet
-- 2025 (July): Shahla Asgharinia (FAO_NSLD)
+Edit paths in the script under “User inputs”:
 
-## Summary                                                 <!-- H2 -->
-Extract HWSD v2 SMUs for an AOI across D1–D7...
+from pathlib import Path
 
-## Key updates (v3.0)                                      <!-- H2 -->
-1. Data source harmonized…
-2. AOI-based SMU extraction…
+WORKING_DIR = Path(r"C:\...\PyAEZ\code\Soil_constraints")
+RASTER_PATH  = WORKING_DIR / "HWSD2_RASTER/HWSD2.bil"
+EXCEL_PATH   = WORKING_DIR / "HWSD2_LAYERS.xlsx"        # sheet: HWSD2_LAYERS
+SHAPE_PATH   = WORKING_DIR / "Ghana/Ghana.shp"          # your AOI
 
-## Inputs                                                  <!-- H2 -->
-- HWSD2 raster (.bil + sidecars)
-- AOI boundary (vector; CRS defined)
-- HWSD attributes Excel
-
-## Outputs                                                 <!-- H2 -->
-- Top_Soil_Layers.xlsx (D1–D3)
-- Sub_Soil_Layers.xlsx (D4–D7)
-
-## Dependencies                                            <!-- H2 -->
-`rasterio`, `geopandas`, `pandas`, `numpy`, `shapely`, `matplotlib`, `openpyxl`
-
-### Install (tip)                                          <!-- H3 -->
-```bash
-conda install -c conda-forge geopandas rasterio shapely gdal proj
-pip install pandas numpy matplotlib openpyxl```
-
+OUT_TOPSOIL  = WORKING_DIR / "Top_Soil_Layers.xlsx"
+OUT_SUBSOIL  = WORKING_DIR / "Sub_Soil_Layers.xlsx"
+QC_RASTER_AOI_PNG = WORKING_DIR / "Raster_and_AOI_Boundary_Check.png"
+QC_CLIP_PNG       = WORKING_DIR / "Clipped_Raster_Check.png"
