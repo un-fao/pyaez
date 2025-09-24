@@ -2,7 +2,7 @@
 
 Extract HWSD v2 Soil Mapping Units (SMUs) for a user-defined Area of Interest (AOI) across seven soil layers (D1–D7), clean attributes, and export ready-to-use layer tables for downstream Soil Constraints evaluation.
 
-** Authors / Credits
+** Authors / Credits**
 
 2016: N. Lakmal Deshapriya
 
