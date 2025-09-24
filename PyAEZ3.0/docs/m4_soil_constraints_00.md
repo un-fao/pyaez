@@ -71,6 +71,7 @@ pip install pandas numpy matplotlib openpyxl
 
 Edit paths in the script under “User inputs”:
 
+python 
 from pathlib import Path
 
 WORKING_DIR = Path(r"C:\...\PyAEZ\code\Soil_constraints")
@@ -82,3 +83,4 @@ OUT_TOPSOIL  = WORKING_DIR / "Top_Soil_Layers.xlsx"
 OUT_SUBSOIL  = WORKING_DIR / "Sub_Soil_Layers.xlsx"
 QC_RASTER_AOI_PNG = WORKING_DIR / "Raster_and_AOI_Boundary_Check.png"
 QC_CLIP_PNG       = WORKING_DIR / "Clipped_Raster_Check.png"
+
