@@ -5,12 +5,12 @@ Extract HWSD v2 Soil Mapping Units (SMUs) for a user-defined Area of Interest (A
 
 ## Authors / credits
 
-* 2016 N. Lakmal Deshapriya
-* 2023 Swun Wunna Htet
-* 2024 (Dec): Swun Wunna Htet
-* 2025 (Apr): Swun Wunna Htet
-* 2025 (May): RutendoTadiwa Mukaratirwa (FAO\_NSLD)
-* 2025 (July): Shahla Asgharinia (FAO\_NSLD)
+* N. Lakmal Deshapriya. 2016 
+* Swun Wunna Htet. 2023 
+* Swun Wunna Htet. 2024 (Dec)
+* Swun Wunna Htet. 2025 (Apr)
+* RutendoTadiwa Mukaratirwa (FAO\_NSLD). 2025 (May)
+* Shahla Asgharinia (FAO\_NSLD). 2025 (July)
 
 ## Summary
 
