@@ -104,8 +104,39 @@ Read `HWSD2_LAYERS.xlsx` (sheet `HWSD2_LAYERS`) and filter rows where `HWSD2_SMU
 * for each `(HWSD2_SMU_ID, LAYER)`, keep the row with max `SHARE` (dominant component)
 
 ### 7) Texture labels
+Map each numeric `TEXTURE_USDA` code (1–13) to its USDA texture class (the script replaces the numeric code with the class name during Step 7).
 
-Map `TEXTURE_USDA` codes (1–13) to USDA class names (e.g., Loam, Sand), replacing the numeric code.
+| Code | USDA texture class |
+| ---- | ------------------ |
+| 1    | Clay (heavy)       |
+| 2    | Silty clay         |
+| 3    | Clay (light)       |
+| 4    | Silty clay loam    |
+| 5    | Clay loam          |
+| 6    | Silt               | 
+| 7    | Silt loam          |
+| 8    | Sandy clay         | 
+| 9    | Loam               | 
+| 10   | Sandy clay loam    | 
+| 11   | Sandy loam         |
+| 12   | Loamy sand         | 
+| 13   | Sand               | 
+
+### Code used in the script (Step 7)
+
+```python
+texture_lookup = pd.DataFrame({
+    "CODE": range(1, 14),
+    "VALUE": [
+        "Clay (heavy)", "Silty clay", "Clay (light)", "Silty clay loam",
+        "Clay loam", "Silt", "Silt loam", "Sandy clay", "Loam",
+        "Sandy clay loam", "Sandy loam", "Loamy sand", "Sand"
+    ]
+})
+soil_data = soil_data.merge(texture_lookup, left_on="TEXTURE_USDA", right_on="CODE", how="left")
+soil_data["TEXTURE_USDA"] = soil_data["VALUE"]
+soil_data.drop(columns=["CODE", "VALUE"], inplace=True)
+```
 
 ### 8) Transform flags
 
@@ -141,20 +172,8 @@ python sc_00_prepare_inputs.py
 * NoData handling: if the source raster lacks nodata, the script uses `-9999`. Confirm downstream tools honor it.
 * Texture mapping: rows with `TEXTURE_USDA == 0` are dropped by design. Adjust Step 6 if you must retain them.
 
-## Suggested repo layout
 
-```
-PyAEZ3.0/
-├─ pyaez/
-│  └─ module4/
-│     └─ soil_constraints/
-│        ├─ sc_00_prepare_inputs.py
-│        └─ sc_01_...
-├─ docs/
-│  └─ soil_constraints_part1.md
-├─ data_input/          # (gitignored)
-└─ outputs/             # (gitignored)
-```
+
 
 ## License and citation
 
