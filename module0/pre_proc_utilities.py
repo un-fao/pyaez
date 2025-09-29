@@ -83,7 +83,7 @@ def get_UN_country(country_name, thr=3, return_gdf=False):
         return AOI[['romnam', 'iso3cd','maplab','geometry']]
 
 
-def export_cava_data(ds, years_list, output_folder='./data_input/CAVA_data/'):
+def export_cava_data(ds, years_list, output_folder='./data_input/CAVA_data/', country_name=''):
     """
     Exports selected time slices and rearranged variable data from an xarray dataset.
 
@@ -104,8 +104,21 @@ def export_cava_data(ds, years_list, output_folder='./data_input/CAVA_data/'):
     for var in ds.keys():
         print(f'Exporting {var}...')
         data = ds[var].values
+
+        # setting proper interval for humidity
+        if var == 'hurs':
+            if np.max(data) > 1:
+                # put data from percentage to the interval [0,1]
+                data = data / 100
+
         rearranged_data = np.moveaxis(data, 0, -1)
-        np.save(os.path.join(output_folder, f"{var}.npy"), rearranged_data[:, :, red_times_idx])
+        np.save(os.path.join(output_folder, f"{var}_{country_name}.npy"), rearranged_data[:, :, red_times_idx])
+
+    
+    # Convert to DataFrame and save
+    print("Exporting dataset as DataFrame...")
+    df = ds.to_dataframe().reset_index()
+    df.to_csv(os.path.join(output_folder, f"cava_dataset_{country_name}.csv"), index=False)
 
 
 def rasterize_country_from_geodataframe(ds, AOI, country_name, output_dir='./data_input/'):
