@@ -100,7 +100,6 @@ country_adm1nm = gdf[gdf['romnam'].str.contains(country_name, case=False, na=Fal
 # Dissolve the matched rows into a single geometry
 AOI = country_adm1nm.dissolve()
 
-
 # Run CAVAPY button
 if st.button("🚀 Run CAVAPY"):
     years_up_to = np.max([np.max(years_list)+1, 2007])   
@@ -155,7 +154,8 @@ if st.button("📤 Export CAVA Data"):
     if "ds" in st.session_state:
         with st.spinner("📦 Exporting CAVA data..."):
             pre_proc_utilities.export_cava_data(
-                st.session_state.ds, years_list, output_folder='./data_input/CAVA_data/'
+                st.session_state.ds, years_list, output_folder='/workspaces/Python-AEZ-FAO/data_input/CAVA_data/',
+                country_name=country_name,
             )
         st.success("✅ CAVA data exported successfully!")
     else:
