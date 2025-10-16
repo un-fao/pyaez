@@ -86,7 +86,8 @@ class ClimateRegime(object):
 
   
 
-    def setClimateAndSoilWaterData(self, min_temp, max_temp, precipitation, short_rad, wind_speed, rel_humidity, Sa = 100., D = 1.):
+    def setClimateAndSoilWaterData(self, min_temp, max_temp, precipitation, short_rad, wind_speed, rel_humidity, 
+                                   Sa = 100., D = 1., itflg = 1):
         """
         (MANDATORY FUNCTION) Load MONTHLY or DAILY climate data into the class and calculate:
         
@@ -105,6 +106,7 @@ class ClimateRegime(object):
             rel_humidity (3D NumPy Array): Relative humidity [fractional, range 0–1]
             Sa (int, float, or 2D NumPy Array, optional): Soil water holding capacity [mm/m]. Default is 100 mm.
             D (int or float, optional): Rooting depth [m]. Default is 1 m.
+            itflg (int, optional): number of iterations to be performed for water balance calculation to achieve stable evaluation
         
         Returns:
             None
@@ -298,15 +300,15 @@ class ClimateRegime(object):
         
         rows, cols = np.where(mask)
 
-        Wb_old = 0.0
-        Sb_old = 0.0
+        #Wb_old = 0.0
+        #Sb_old = 0.0
         
         # --- Main loop over valid pixels ---
         for i_row, i_col in zip(rows, cols):
 
             # Reset state per pixel  
-            #Wb_old = 0.0
-            #Sb_old = 0.0
+            Wb_old = 0.0
+            Sb_old = 0.0
 
             # Take 1D views to reduce indexing cost
             Tx_p  = Tx365[i_row, i_col, :].astype(np.float64, copy=False)
@@ -327,34 +329,124 @@ class ClimateRegime(object):
                     # Fallback / pad or recompute to match T
                     raise ValueError("getTempTrend returned invalid length for pixel ({}, {})".format(i_row, i_col))
 
-            for t in range(T):
-                p = psh(0., self.Eto365[i_row, i_col, t])
-                
-                Eta_new, Etm_new, Wb_new, Wx_new, Sb_new, kc_new = RefWaterBalanceCalc(
-                            Tx_p[t], Ta_p[t], P_p[t],
-                            Txsnm, Fsnm, Eto_p[t],
-                            Wb_old, Sb_old,
-                            t, istart0, istart1,
-                            Sa, D, p, lgpt5_point, istup[t]
-                        )
+            for jj in range(itflg):  # spin-up iterations, if itflg > 1 we can converge better to stable estimations
+                for t in range(T):
+                    p = psh(0., self.Eto365[i_row, i_col, t])
+                    
+                    Eta_new, Etm_new, Wb_new, Wx_new, Sb_new, kc_new = RefWaterBalanceCalc(
+                                Tx_p[t], Ta_p[t], P_p[t],
+                                Txsnm, Fsnm, Eto_p[t],
+                                Wb_old, Sb_old,
+                                t, istart0, istart1,
+                                Sa, D, p, lgpt5_point, istup[t]
+                            )
 
-                # Physical guards (adjust bounds to your model physics)
-                Eta_new = max(Eta_new, 0.0)
-                # Wb_new = max(Wb_new, 0.0)
-                # Sb_new = max(Sb_new, 0.0)
-                # kc_new = np.clip(kc_new, 0.0, 1.3)
-        
-                self.Eta365[i_row, i_col, t] = Eta_new
-                self.Etm365[i_row, i_col, t] = Etm_new
-                self.Wb365[i_row, i_col, t]  = Wb_new
-                self.Wx365[i_row, i_col, t]  = Wx_new
-                self.Sb365[i_row, i_col, t]  = Sb_new
-                self.kc365[i_row, i_col, t]  = kc_new
+                    # Physical guards (adjust bounds to your model physics)
+                    Eta_new = max(Eta_new, 0.0)
+                    # Wb_new = max(Wb_new, 0.0)
+                    # Sb_new = max(Sb_new, 0.0)
+                    # kc_new = np.clip(kc_new, 0.0, 1.3)
+            
+                    self.Eta365[i_row, i_col, t] = Eta_new
+                    self.Etm365[i_row, i_col, t] = Etm_new
+                    self.Wb365[i_row, i_col, t]  = Wb_new
+                    self.Wx365[i_row, i_col, t]  = Wx_new
+                    self.Sb365[i_row, i_col, t]  = Sb_new
+                    self.kc365[i_row, i_col, t]  = kc_new
 
-                Wb_old = Wb_new
-                Sb_old = Sb_new
+                    Wb_old = Wb_new
+                    Sb_old = Sb_new
     
+        """
+        FORTRAN CODE
+
         
+        c calculate daily balance for water and snow bucket
+        Wb365(MD365) = Wbstart
+        Sb365(MD365) = Sbstart
+        
+        do 60 i=1,MD365
+          p = psh(0, Et365(i))
+          Wx365(i) = 0
+        
+          ! Snow period: Tmax <= Txsnm
+          if (Tx365(i) .le. Txsnm) then
+            kc365(i) = kc1
+            etm = kc1 * Et365(i)
+            Etm365(i) = etm
+            sbx = sb + Pcp365(i)
+            if (sbx .ge. etm) then
+              Sb365(i) = sbx - etm
+              Eta365(i) = etm
+            else
+              Sb365(i) = 0
+              Eta365(i) = eta(wb, wx, etm-sbx, Sa, D, p, 0.) + sbx
+            endif
+            Wb365(i) = wb
+            sb = Sb365(i)
+        
+          ! Cold water period: Ta <= 0
+          else if (Ta365(i) .le. 0) then
+            kc365(i) = kc2
+            etm = kc2 * Et365(i)
+            Etm365(i) = etm
+            snm = amin1(Fsnm*(Tx365(i)-Txsnm), sb)
+            sb = sb - snm
+            wb = wb + snm
+            sbx = sb
+            if (sbx .ge. etm) then
+              Sb365(i) = sbx - etm
+              Eta365(i) = etm
+              if (wb .gt. Sa) then
+                wx = wb - Sa + Pcp365(i)
+                wb = Sa
+              else
+                wx = Pcp365(i)
+              endif
+            else
+              Sb365(i) = 0
+              Eta365(i) = eta(wb, wx, etm-sbx, Sa, D, p, Pcp365(i)) + sbx
+            endif
+            Wb365(i) = wb
+            sb = Sb365(i)
+            Wx365(i) = wx
+        
+          ! Transition period: 0 < Ta < 5
+          else if (Ta365(i) .lt. 5) then
+            if (fromt0(i) .eq. 1) then
+              kc = kc3
+            else
+              kc = kc7
+            endif
+            kc365(i) = kc
+            etm = kc * Et365(i)
+            Etm365(i) = etm
+            snm = amin1(Fsnm*(Tx365(i)-Txsnm), sb)
+            wb = wb + snm
+            sb = sb - snm
+            Eta365(i) = eta(wb, wx, etm, Sa, D, p, Pcp365(i))
+            Sb365(i) = sb
+            Wx365(i) = wx
+            Wb365(i) = wb
+        
+          ! Warm period: Ta >= 5
+          else if (Ta365(i) .ge. 5) then
+            kc = kc5
+            kc365(i) = kc
+            etm = kc * Et365(i)
+            Etm365(i) = etm
+            snm = amin1(Fsnm*(Tx365(i)-Txsnm), sb)
+            wb = wb + snm
+            sb = sb - snm
+            Eta365(i) = eta(wb, wx, etm, Sa, D, p, Pcp365(i))
+            Sb365(i) = sb
+            Wx365(i) = wx
+            Wb365(i) = wb
+          endif
+        60 continue
+        
+
+        """
     def getThermalClimate(self):
         """Classification of rainfall and temperature seasonality into thermal climate classes.
 
