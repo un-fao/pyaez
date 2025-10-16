@@ -329,33 +329,55 @@ class ClimateRegime(object):
                     # Fallback / pad or recompute to match T
                     raise ValueError("getTempTrend returned invalid length for pixel ({}, {})".format(i_row, i_col))
 
-            for jj in range(itflg):  # spin-up iterations, if itflg > 1 we can converge better to stable estimations
+            # --- initialize storages before spin-up
+            Wb_old = 0.0
+            Sb_old = 0.0
+
+            # --- spin-up iterations
+            for jj in range(itflg):  
                 for t in range(T):
                     p = psh(0., self.Eto365[i_row, i_col, t])
-                    
+
                     Eta_new, Etm_new, Wb_new, Wx_new, Sb_new, kc_new = RefWaterBalanceCalc(
-                                Tx_p[t], Ta_p[t], P_p[t],
-                                Txsnm, Fsnm, Eto_p[t],
-                                Wb_old, Sb_old,
-                                t, istart0, istart1,
-                                Sa, D, p, lgpt5_point, istup[t]
-                            )
+                        Tx_p[t], Ta_p[t], P_p[t],
+                        Txsnm, Fsnm, Eto_p[t],
+                        Wb_old, Sb_old,
+                        t, istart0, istart1,
+                        Sa, D, p, lgpt5_point, istup[t]
+                    )
 
-                    # Physical guards (adjust bounds to your model physics)
+                    # Physical guards (optional)
                     Eta_new = max(Eta_new, 0.0)
-                    # Wb_new = max(Wb_new, 0.0)
-                    # Sb_new = max(Sb_new, 0.0)
-                    # kc_new = np.clip(kc_new, 0.0, 1.3)
-            
-                    self.Eta365[i_row, i_col, t] = Eta_new
-                    self.Etm365[i_row, i_col, t] = Etm_new
-                    self.Wb365[i_row, i_col, t]  = Wb_new
-                    self.Wx365[i_row, i_col, t]  = Wx_new
-                    self.Sb365[i_row, i_col, t]  = Sb_new
-                    self.kc365[i_row, i_col, t]  = kc_new
 
+                    # Update storages
                     Wb_old = Wb_new
                     Sb_old = Sb_new
+
+                # End of 1 spin-up iteration → continue looping to stabilize
+                # No outputs stored yet (unless last iteration)
+
+            # --- After spin-up convergence (jj = itflg - 1)
+            # Run one final daily loop to record results
+            for t in range(T):
+                p = psh(0., self.Eto365[i_row, i_col, t])
+
+                Eta_new, Etm_new, Wb_new, Wx_new, Sb_new, kc_new = RefWaterBalanceCalc(
+                    Tx_p[t], Ta_p[t], P_p[t],
+                    Txsnm, Fsnm, Eto_p[t],
+                    Wb_old, Sb_old,
+                    t, istart0, istart1,
+                    Sa, D, p, lgpt5_point, istup[t]
+                )
+
+                self.Eta365[i_row, i_col, t] = Eta_new
+                self.Etm365[i_row, i_col, t] = Etm_new
+                self.Wb365[i_row, i_col, t]  = Wb_new
+                self.Wx365[i_row, i_col, t]  = Wx_new
+                self.Sb365[i_row, i_col, t]  = Sb_new
+                self.kc365[i_row, i_col, t]  = kc_new
+
+                Wb_old = Wb_new
+                Sb_old = Sb_new
     
         """
         FORTRAN CODE
