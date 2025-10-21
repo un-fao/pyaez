@@ -782,62 +782,46 @@ class ClimateRegime(object):
                 B1, B2, B3, B4, B5, B6, B7, B8, B9]
 
     def getLGP(self):
-        """
-        Calculates the Length of Growing Period (LGP) in days for each pixel.
+        """Calculate length of growing period (LGP).
 
-        Returns:
-            np.ndarray: 2D array representing the number of days per pixel where:
-                        - Temperature is suitable for growth (based on `islgpt`)
-                        - Moisture is adequate (Eta/Etm ≥ 0.4)
-                        Units: Days
+        Args:
+            None.
+        Return:
+           lgp (2D-NumPy Array): length of growing periods [Unit: Days].
+        """        
 
-        Notes:
-            - Uses daily temperature and evapotranspiration data.
-            - Applies a 10-day smoothing via `val10day()` function.
-            - Extends the year to handle wrap-around growing seasons.
-            - NaN-safe: excludes invalid moisture ratio values from the count.
-            - Masked pixels are excluded from the result.
-        """
-        DAYS_IN_YEAR = 366 if self.leap_year else 365
+        if self.leap_year:
+            DAYS_IN_YEAR = 366
+        else:
+            DAYS_IN_YEAR = 365
+
+        
         lgp_tot = np.zeros((self.im_height, self.im_width))
-
+        #============================
         for i_row in range(self.im_height):
             for i_col in range(self.im_width):
+                if self.set_mask:
+                    if self.im_mask[i_row, i_col] == self.nodata_val:
+                        continue
+                Etm365X = np.append(self.Etm365[i_row, i_col, :], self.Etm365[i_row, i_col, :])
+                Eta365X = np.append(self.Eta365[i_row, i_col, :], self.Eta365[i_row, i_col, :])
+                islgp = islgpt(self.meanT_daily[i_row, i_col, :])
+                xx = val10day(Eta365X)
+                yy = val10day(Etm365X)
+                lgp_whole = xx[:DAYS_IN_YEAR]/yy[:DAYS_IN_YEAR]
+                count = 0
+                for i in range(len(lgp_whole)):
+                    if islgp[i] == 1 and lgp_whole[i] >= 0.4:
+                        count = count+1
 
-                # Skip masked pixels
-                if self.set_mask and self.im_mask[i_row, i_col] == self.nodata_val:
-                    continue
+                lgp_tot[i_row, i_col] = count
 
-                # Extend the year to handle wrap-around seasons
-                Etm_extended = np.append(self.Etm365[i_row, i_col, :], self.Etm365[i_row, i_col, :])
-                Eta_extended = np.append(self.Eta365[i_row, i_col, :], self.Eta365[i_row, i_col, :])
-
-                # Temperature suitability mask (1 = suitable, 0 = not)
-                temp_suitability = np.array(islgpt(self.meanT_daily[i_row, i_col, :]))
-
-                # Apply 10-day smoothing to Eta and Etm
-                Eta_10day = val10day(Eta_extended)
-                Etm_10day = val10day(Etm_extended)
-
-                # Compute moisture adequacy ratio safely (avoid division by zero)
-                moisture_ratio = np.divide(
-                    Eta_10day[:DAYS_IN_YEAR],
-                    Etm_10day[:DAYS_IN_YEAR],
-                    out=np.zeros_like(Eta_10day[:DAYS_IN_YEAR]),
-                    where=Etm_10day[:DAYS_IN_YEAR] != 0
-                )
-
-                # Create mask for valid (non-NaN) moisture values
-                valid_mask = ~np.isnan(moisture_ratio)
-
-                # Count days where both temperature and moisture are suitable
-                lgp_days = np.sum((temp_suitability == 1) & (moisture_ratio >= 0.4) & valid_mask)
-                lgp_tot[i_row, i_col] = lgp_days
-
-        # Apply mask if needed
-        return np.where(self.im_mask, lgp_tot, np.nan) if self.set_mask else lgp_tot
-
+        if self.set_mask:
+            return np.where(self.im_mask, lgp_tot, np.nan)
+        else:
+            return lgp_tot
   
+    
     def getLGPClassified(self, lgp): # Original PyAEZ source code
         """This function calculates the classification of moisture regimes based on LGP.
 
