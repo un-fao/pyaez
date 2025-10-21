@@ -204,73 +204,7 @@ class ClimateRegime(object):
             out=np.zeros_like(self.pet_daily),
             where=self.pet_daily > 0
         )
-        """
-        # Constants for snowmelt and crop coefficient - Constants for snowmelt and crop coefficient
-        kc_list = np.array([0.0, 0.1, 0.2, 0.5, 1.0])  # Kc values for the reference crop
-        Txsnm = 0.0   # Snow melt temperature threshold (°C)
-        Fsnm = 5.5    # Snow melting coefficient
         
-        # Initial water balance states
-        Sb_old = 0.0
-        Wb_old = 0.0
-
-        # Variables initialization
-        Tx365 = self.maxT_daily
-        Ta365 = self.meanT_daily
-        Pcp365 = self.totalPrec_daily
-        self.Eto365 = self.pet_daily  # Eto
-
-        self.Etm365 = np.zeros(Tx365.shape)
-        self.Eta365 = np.zeros(Tx365.shape)
-        self.Sb365 = np.zeros(Tx365.shape)
-        self.Wb365 = np.zeros(Tx365.shape)
-        self.Wx365 = np.zeros(Tx365.shape)
-        self.kc365 = np.zeros(Tx365.shape)
-        self.maxT_daily_new = np.zeros(Tx365.shape)
-
-        # Definition of valid pixels
-        if self.set_mask:
-            valid_pixels = np.argwhere(self.im_mask != self.nodata_val)
-        else:
-            valid_pixels = np.argwhere(np.ones((self.im_height, self.im_width), dtype=bool))
-        
-        for i_row, i_col in valid_pixels:
-
-            lgpt5_point = np.sum(self.meanT_daily[i_row, i_col,:] >= 5)
-
-            # totalPrec_monthly = averageDailyToMonthly(self.totalPrec_daily[i_row, i_col, :], self.leap_year)
-            meanT_daily_point = Ta365[i_row, i_col, :]
-            
-            # Determine growing season start and end based on temperature trends
-            istart0, istart1 = rainPeak(meanT_daily_point, lgpt5_point)
-            
-            # Get temperature trend for crop development stages
-            istup = getTempTrend(self.meanT_daily[i_row, i_col, :])
-
-            for d in range(0, doy):
-                p = psh(0., self.Eto365[i_row, i_col, d])
-                Eta_new, Etm_new, Wb_new, Wx_new, Sb_new, kc_new = RefWaterBalanceCalc(
-                    np.float64(Tx365[i_row, i_col, d]), np.float64(
-                        Ta365[i_row, i_col, d]),
-                        # Ta365[i_row, i_col, doy]),
-                    np.float64(Pcp365[i_row, i_col, d]), Txsnm, Fsnm, np.float64(
-                        self.Eto365[i_row, i_col, d]),
-                    Wb_old, Sb_old, d, istart0, istart1,
-                    Sa, D, p, lgpt5_point, istup[d])
-
-                Eta_new = max(Eta_new, 0.0)
-
-                self.Eta365[i_row, i_col, d] = Eta_new
-                self.Etm365[i_row, i_col, d] = Etm_new
-                self.Wb365[i_row, i_col, d] = Wb_new
-                self.Wx365[i_row, i_col, d] = Wx_new
-                self.Sb365[i_row, i_col, d] = Sb_new
-                self.kc365[i_row, i_col, d] = kc_new
-
-                Wb_old = Wb_new
-                Sb_old = Sb_new
-
-        """   
         # Constants for snowmelt and crop coefficient - Constants for snowmelt and crop coefficient
         kc_list = np.array([0.0, 0.1, 0.2, 0.5, 1.0])  # Kc values for the reference crop
         Txsnm = 0.0   # Snow melt temperature threshold (°C)
@@ -470,126 +404,164 @@ class ClimateRegime(object):
 
         """
     def getThermalClimate(self):
-        """Classification of rainfall and temperature seasonality into thermal climate classes.
+        """
+        Classifies rainfall and temperature seasonality into thermal climate classes.
 
-        Args:
-            None.
-        Return:
-            tclimate (2D NumPy Array): Thermal Climate classification
-        """        
-        # Note that currently, this thermal climate is designed only for the northern hemisphere, southern hemisphere is not implemented yet.
-        thermal_climate = np.zeros((self.im_height, self.im_width), dtype= np.int8)
+        Returns:
+            np.ndarray: 2D array of thermal climate classification codes.
+
+        Climate Codes:
+            1  - Tropical lowland (also used for equatorial uniform rainfall)
+            2  - Tropical highland
+            3  - Subtropical summer rainfall (also used for equatorial seasonal rainfall)
+            4  - Subtropical winter rainfall
+            5  - Subtropical low rainfall
+            6  - Temperate oceanic
+            7  - Temperate sub-continental
+            8  - Temperate continental
+            9  - Boreal oceanic
+            10 - Boreal sub-continental
+            11 - Boreal continental
+            12 - Arctic
+
+        Notes:
+            - Handles both hemispheres based on latitude.
+            - Special logic for equatorial zone (|latitude| ≤ 5°), mapped to existing classes.
+        """
+        thermal_climate = np.zeros((self.im_height, self.im_width), dtype=np.int8)
 
         for i_row in range(self.im_height):
             for i_col in range(self.im_width):
 
-                if self.set_mask:
-                    if self.im_mask[i_row, i_col] == self.nodata_val:
-                        continue
-                
-                # converting daily to monthly
-                meanT_monthly_sealevel = averageDailyToMonthly(self.meanT_daily_sealevel[i_row,i_col,:], self.leap_year)
-                meanT_monthly = averageDailyToMonthly(self.meanT_daily[i_row,i_col,:], self.leap_year)
-                P_by_PET_monthly = averageDailyToMonthly(self.P_by_PET_daily[i_row,i_col,:], self.leap_year)
+                # Skip masked pixels
+                if self.set_mask and self.im_mask[i_row, i_col] == self.nodata_val:
+                    continue
 
-                if self.set_mask:
-                    if self.im_mask[i_row, i_col] == self.nodata_val:
-                        continue
-                    
-                # Seasonal parameters            
-                summer_PET0 = np.sum(P_by_PET_monthly[3:9])
-                winter_PET0 = np.sum([P_by_PET_monthly[9::], P_by_PET_monthly[0:3]])
-                Ta_diff = np.max(meanT_monthly_sealevel) - \
-                    np.min(meanT_monthly_sealevel)
-                
-                # Tropics
+                lat = self.latitude[i_row, i_col]
+
+                # Convert daily to monthly values
+                meanT_monthly_sealevel = averageDailyToMonthly(
+                    self.meanT_daily_sealevel[i_row, i_col, :], self.leap_year)
+                meanT_monthly = averageDailyToMonthly(
+                    self.meanT_daily[i_row, i_col, :], self.leap_year)
+                P_by_PET_monthly = averageDailyToMonthly(
+                    self.P_by_PET_daily[i_row, i_col, :], self.leap_year)
+                monthly_precip = averageDailyToMonthly(
+                    self.totalPrec_daily[i_row, i_col, :], self.leap_year)
+
+                Ta_diff = np.max(meanT_monthly_sealevel) - np.min(meanT_monthly_sealevel)
+
+                # Equatorial zone logic
+                if abs(lat) <= 5:
+                    rainfall_range = np.max(monthly_precip) - np.min(monthly_precip)
+                    if rainfall_range < 50:  # Threshold for uniform rainfall
+                        thermal_climate[i_row, i_col] = 1  # Tropical lowland (proxy for equatorial uniform)
+                    else:
+                        thermal_climate[i_row, i_col] = 3  # Subtropical summer rainfall (proxy for equatorial seasonal)
+                    continue
+
+                # Define seasonal months based on hemisphere
+                if lat > 5:
+                    summer_months = [3, 4, 5, 6, 7, 8]  # Apr–Sep
+                    winter_months = [9, 10, 11, 0, 1, 2]  # Oct–Mar
+                else:
+                    summer_months = [9, 10, 11, 0, 1, 2]  # Oct–Mar
+                    winter_months = [3, 4, 5, 6, 7, 8]  # Apr–Sep
+
+                summer_PET0 = np.sum(P_by_PET_monthly[summer_months])
+                winter_PET0 = np.sum(P_by_PET_monthly[winter_months])
+
+                # Tropical climates
                 if np.min(meanT_monthly_sealevel) >= 18. and Ta_diff < 15.:
                     if np.mean(meanT_monthly) < 20.:
                         thermal_climate[i_row, i_col] = 2  # Tropical highland
                     else:
                         thermal_climate[i_row, i_col] = 1  # Tropical lowland
-                        
-                # SubTropic
-                elif np.min(meanT_monthly_sealevel) >= 5. and np.sum(meanT_monthly_sealevel >= 10) >= 8:
-                    if np.sum(self.totalPrec_daily[i_row,i_col,:]) < 250:
-                        # 'Subtropics Low Rainfall
-                        thermal_climate[i_row,i_col] = 5
-                    elif self.latitude[i_row,i_col]>=0: 
-                        if summer_PET0 >= winter_PET0:
-                            # Subtropics Summer Rainfall
-                            thermal_climate[i_row,i_col] = 3
-                        else:
-                            # Subtropics Winter Rainfall
-                            thermal_climate[i_row,i_col] = 4
-                    else:
-                        if summer_PET0 >= winter_PET0:
-                            # Subtropics Winter Rainfall
-                            thermal_climate[i_row,i_col] = 4                   
-                        else:
-                            # Subtropics Summer Rainfall
-                            thermal_climate[i_row,i_col] = 3
 
-                        
-                # Temperate
+                # Subtropical climates
+                elif np.min(meanT_monthly_sealevel) >= 5. and np.sum(meanT_monthly_sealevel >= 10) >= 8:
+                    total_precip = np.sum(self.totalPrec_daily[i_row, i_col, :])
+                    if total_precip < 250:
+                        thermal_climate[i_row, i_col] = 5  # Low rainfall
+                    else:
+                        summer_dominant = summer_PET0 >= winter_PET0
+                        if summer_dominant:
+                            thermal_climate[i_row, i_col] = 3  # Summer rainfall
+                        else:
+                            thermal_climate[i_row, i_col] = 4  # Winter rainfall
+
+                # Temperate climates
                 elif np.sum(meanT_monthly_sealevel >= 10) >= 4:
                     if Ta_diff <= 20:
-                        # Oceanic Temperate
-                        thermal_climate[i_row, i_col] = 6
+                        thermal_climate[i_row, i_col] = 6  # Oceanic
                     elif Ta_diff <= 35:
-                        # Sub-Continental Temperate
-                        thermal_climate[i_row, i_col] = 7
+                        thermal_climate[i_row, i_col] = 7  # Sub-continental
                     else:
-                        # Continental Temperate
-                        thermal_climate[i_row, i_col] = 8
+                        thermal_climate[i_row, i_col] = 8  # Continental
 
+                # Boreal climates
                 elif np.sum(meanT_monthly_sealevel >= 10) >= 1:
-                    # Boreal
                     if Ta_diff <= 20:
-                        # Oceanic Boreal
-                        thermal_climate[i_row, i_col] = 9
+                        thermal_climate[i_row, i_col] = 9  # Oceanic
                     elif Ta_diff <= 35:
-                        # Sub-Continental Boreal
-                        thermal_climate[i_row, i_col] = 10
+                        thermal_climate[i_row, i_col] = 10  # Sub-continental
                     else:
-                        # Continental Boreal
-                        thermal_climate[i_row, i_col] = 11
+                        thermal_climate[i_row, i_col] = 11  # Continental
+
+                # Arctic climate
                 else:
-                    # Arctic
                     thermal_climate[i_row, i_col] = 12
-                    
-        if self.set_mask:
-            return np.where(self.im_mask, thermal_climate, np.nan)
-        else:
-            return thermal_climate
-    
+
+        return np.where(self.im_mask, thermal_climate, np.nan) if self.set_mask else thermal_climate
+
     
     def getThermalZone(self):
-        """The thermal zone is classified based on actual temperature which reflects 
-        on the temperature regimes of major thermal climates.
+        """
+        Classifies thermal zones based on monthly temperature regimes.
 
-        Args:
-            None.
-        Return:
-            tzone (2D-NumPy Array): thermal zone class.
-        """        
+        Returns:
+            np.ndarray: 2D array of thermal zone classification codes.
+
+        Thermal Zone Codes:
+            1  - Tropics, warm
+            2  - Tropics, cool/cold/very cold
+            3  - Subtropics, warm/moderately cool
+            4  - Subtropics, cool
+            5  - Subtropics, cold
+            6  - Subtropics, very cold
+            7  - Temperate, cool
+            8  - Temperate, cold
+            9  - Temperate, very cold
+            10 - Boreal, cold
+            11 - Boreal, very cold
+            12 - Arctic
+
+        Notes:
+            - Classification is based on sea-level temperature thresholds and actual temperature variability.
+            - Masked pixels are excluded from classification.
+        """
+ 
         thermal_zone = np.zeros((self.im_height, self.im_width))
     
         for i_row in range(self.im_height):
             for i_col in range(self.im_width):
 
+                # Skip masked pixels
+                if self.set_mask and self.im_mask[i_row, i_col] == self.nodata_val:
+                    continue
+    
+                # Convert daily to monthly temperature
                 meanT_monthly = averageDailyToMonthly(self.meanT_daily[i_row, i_col, :], self.leap_year)
                 meanT_monthly_sealevel =  averageDailyToMonthly(self.meanT_daily_sealevel[i_row, i_col, :], self.leap_year)
     
-                if self.set_mask:
-                    if self.im_mask[i_row, i_col] == self.nodata_val:
-                        continue
-    
+                # Tropics
                 if np.min(meanT_monthly_sealevel) >= 18 and np.max(meanT_monthly)-np.min(meanT_monthly) < 15:
                     if np.mean(meanT_monthly) > 20:
                         thermal_zone[i_row,i_col] = 1 # Tropics Warm
                     else:
                         thermal_zone[i_row,i_col] = 2 # Tropics cool/cold/very cold
                 
+                # Subtropics
                 elif np.min(meanT_monthly_sealevel) > 5 and np.sum(meanT_monthly_sealevel > 10) >= 8:
                     if np.sum(meanT_monthly<5) >= 1 and np.sum(meanT_monthly>10) >= 4:
                         thermal_zone[i_row,i_col] =  4 # Subtropics, cool
@@ -600,6 +572,7 @@ class ClimateRegime(object):
                     else:
                         thermal_zone[i_row,i_col] =  3 # Subtropics, warm/mod. cool
     
+                # Temperate
                 elif np.sum(meanT_monthly_sealevel >= 10) >= 4:
                     if np.sum(meanT_monthly<5) >= 1 and np.sum(meanT_monthly>10) >= 4:
                         thermal_zone[i_row,i_col] =  7 # Temperate, cool
@@ -608,11 +581,14 @@ class ClimateRegime(object):
                     elif np.sum(meanT_monthly<10) == 12:
                         thermal_zone[i_row,i_col] =  9 # Temperate, very cold
     
+                # Boreal
                 elif np.sum(meanT_monthly_sealevel >= 10) >= 1:
                     if np.sum(meanT_monthly<5) >= 1 and np.sum(meanT_monthly>10) >= 1:
                         thermal_zone[i_row,i_col] = 10 # Boreal, cold
                     elif np.sum(meanT_monthly<10) == 12:
                         thermal_zone[i_row,i_col] = 11 # Boreal, very cold
+                
+                # Arctic
                 else:
                         thermal_zone[i_row,i_col] = 12 # Arctic
     
@@ -621,227 +597,246 @@ class ClimateRegime(object):
         else:
             return thermal_zone
 
-    def getThermalLGP0(self):
-        """Calculate Thermal Length of Growing Period (LGPt) with 
-        temperature threshold of 0 degree Celcius.
+    def _computeThermalLGP(self, threshold, attr_name):
+        """
+        Internal method to compute the Thermal Length of Growing Period (LGP)
+        for a given temperature threshold.
 
         Args:
-            None.
-        Return:
-            lgpt0 (2D-NumPy Array): temperature growing period with 0 Deg Celsius. [Unit: Days]
-        """        
-        # Adding interpolation to the dataset
-        # interp_daily_temp = np.zeros((self.im_height, self.im_width, 365))
+            threshold (float): Temperature threshold in °C.
+            attr_name (str): Name of the attribute to store the result (e.g., 'lgpt0').
 
-        lgpt0 = np.sum(self.meanT_daily>=0, axis=2)
+        Returns:
+            np.ndarray: 2D array of number of days with mean temperature ≥ threshold.
+        """
+        lgp = np.sum(self.meanT_daily >= threshold, axis=2)
+
         if self.set_mask:
-            lgpt0 = np.where(self.im_mask,lgpt0,np.nan)
-        
-        self.lgpt0=lgpt0.copy()
-        return lgpt0
+            lgp = np.where(self.im_mask, lgp, np.nan)
+
+        setattr(self, attr_name, lgp.copy())
+        return lgp
+
+    def getThermalLGP0(self):
+        """
+        Calculates the Thermal Length of Growing Period (LGP) using a temperature threshold of 0°C.
+        Returns:
+            np.ndarray: Days with mean temperature ≥ 0°C.
+        """
+        return self._computeThermalLGP(threshold=0, attr_name='lgpt0')
 
 
     def getThermalLGP5(self):
-        """Calculate Thermal Length of Growing Period (LGPt) with 
-        temperature threshold of 5 degree Celcius.
+        """
+        Calculates the Thermal Length of Growing Period (LGP) using a temperature threshold of 5°C.
+        Returns:
+            np.ndarray: Days with mean temperature ≥ 5°C.
+        """
+        return self._computeThermalLGP(threshold=5, attr_name='lgpt5')
 
-        Args:
-            None.
-        Return:
-            lgpt5 (2D-NumPy Array): temperature growing period with 5 Deg Celsius. [Unit: Days]
-        """          
-        lgpt5 = np.sum(self.meanT_daily>=5, axis=2)
-        if self.set_mask:
-            lgpt5 = np.where(self.im_mask,lgpt5,np.nan)
-
-        self.lgpt5 = lgpt5.copy()
-        return lgpt5
 
     def getThermalLGP10(self):
-        """Calculate Thermal Length of Growing Period (LGPt) with
-        temperature threshold of 10 degree Celcius
+        """
+        Calculates the Thermal Length of Growing Period (LGP) using a temperature threshold of 10°C.
+        Returns:
+            np.ndarray: Days with mean temperature ≥ 10°C.
+        """
+        return self._computeThermalLGP(threshold=10, attr_name='lgpt10')
+
+    def _computeTemperatureSum(self, threshold, attr_name):
+        """
+        Internal method to compute temperature summation above a given threshold.
 
         Args:
-            None.
-        Return:
-            lgpt10 (2D-NumPy Array): temperature growing period with 10 Deg Celsius. [Unit: Days]
+            threshold (float): Temperature threshold in °C.
+            attr_name (str): Name of the attribute to store the result (e.g., 'tsum0').
+
+        Returns:
+            np.ndarray: 2D array of accumulated daily mean temperatures above the threshold.
+                        Units: Degree-Days
         """
+        tempT = self.meanT_daily.copy()
+        tempT[tempT < threshold] = 0
+        tsum = np.round(np.sum(tempT, axis=2), decimals=0)
 
-        lgpt10 = np.sum(self.meanT_daily >= 10, axis=2)
         if self.set_mask:
-            lgpt10 = np.where(self.im_mask, lgpt10, np.nan)
+            tsum = np.where(self.im_mask, tsum, np.nan)
 
-        self.lgpt10 = lgpt10.copy()
-        return lgpt10
+        setattr(self, attr_name, tsum.copy())
+        return tsum
 
     def getTemperatureSum0(self):
-        """Calculate temperature summation at temperature threshold 
-        of 0 degree Celcius.
-
-        Args:
-            None.
-        Return:
-            tsum0 (2D-NumPy Array):Accumulative daily average temperature (Ta) for days
-                                    when Ta is above the thresholds of 0 degree Celcius.
-                                    [Unit: Degree-Days]
         """
-        tempT = self.meanT_daily.copy()
-        tempT[tempT<0] = 0
-        tsum0 = np.round(np.sum(tempT, axis=2), decimals = 0) 
-        # masking
-        if self.set_mask:
-            tsum0 = np.where(self.im_mask, tsum0, np.nan)
-        return tsum0
+        Calculates temperature summation for days with mean temperature ≥ 0°C.
+
+        Returns:
+            np.ndarray: Accumulated degree-days above 0°C.
+        """
+        return self._computeTemperatureSum(threshold=0, attr_name='tsum0')
+
 
     def getTemperatureSum5(self):
-        """Calculate temperature summation at temperature threshold 
-        of 5 degree Celcius.
-
-        Args:
-            None.
-        Return:
-            tsum5 (2D-NumPy Array):Accumulative daily average temperature (Ta) for days
-                                    when Ta is above the thresholds of 5 degree Celcius.
-                                    [Unit: Degree-Days]
         """
-        tempT = self.meanT_daily.copy()
-        tempT[tempT<5] = 0
-        tsum5 = np.round(np.sum(tempT, axis=2), decimals = 0) 
-        # masking
-        if self.set_mask: 
-            tsum5 = np.where(self.im_mask, tsum5, np.nan)
-        return tsum5
-        
+        Calculates temperature summation for days with mean temperature ≥ 5°C.
+
+        Returns:
+            np.ndarray: Accumulated degree-days above 5°C.
+        """
+        return self._computeTemperatureSum(threshold=5, attr_name='tsum5')
+
 
     def getTemperatureSum10(self):
-        """Calculate temperature summation at temperature threshold 
-        of 10 degree Celcius
-
-        Args:
-            None.
-        Return:
-            tsum10 (2D-NumPy Array):Accumulative daily average temperature (Ta) for days
-                                    when Ta is above the thresholds of 10 degree Celcius. 
-                                    [Unit: Degree-Days]
         """
-        tempT = self.meanT_daily.copy()
-        tempT[tempT<10] = 0
-        tsum10 = np.round(np.sum(tempT, axis=2), decimals = 0) 
-        # masking
-        if self.set_mask: 
-            tsum10 = np.where(self.im_mask, tsum10, np.nan)
-        return tsum10
+        Calculates temperature summation for days with mean temperature ≥ 10°C.
+
+        Returns:
+            np.ndarray: Accumulated degree-days above 10°C.
+        """
+        return self._computeTemperatureSum(threshold=10, attr_name='tsum10')
 
     def getTemperatureProfile(self):
-        """Classification of temperature ranges for temperature profile classes.
+        """
+        Classifies temperature profile based on daily temperature transitions.
 
-        Args:
-            None.
-        Return:
-            2D NumPy: 18 2D arrays [A1-A9, B1-B9] correspond to each Temperature Profile class [Unit: days]
-        """        
+        Returns:
+            list of np.ndarray: 18 2D arrays representing the number of days per pixel
+                                where temperature is rising (A1–A9) or falling (B1–B9)
+                                within specific temperature ranges.
 
-        if self.leap_year:
-            DAYS_IN_YEAR = 366
-        else:
-            DAYS_IN_YEAR = 365
-        
+        Temperature Profile Classes:
+            A1–A9: Warming transitions
+            B1–B9: Cooling transitions
+
+            Ranges:
+                - A1/B1: ≥ 30°C
+                - A2/B2: 25–30°C
+                - A3/B3: 20–25°C
+                - A4/B4: 15–20°C
+                - A5/B5: 10–15°C
+                - A6/B6: 5–10°C
+                - A7/B7: 0–5°C
+                - A8/B8: -5–0°C
+                - A9/B9: < -5°C
+
+        Notes:
+            - Uses a 5th-degree polynomial fit to smooth daily temperature time series.
+            - Handles leap years.
+            - Applies masking if enabled.
+        """
+        def compute_transition_counts(meanT_first, meanT_diff, low, high, direction):
+            """Helper to compute transition counts for warming or cooling."""
+            if direction == "warming":
+                mask = np.logical_and(meanT_diff > 0, np.logical_and(meanT_first >= low, meanT_first < high))
+            elif direction == "cooling":
+                mask = np.logical_and(meanT_diff < 0, np.logical_and(meanT_first >= low, meanT_first < high))
+            else:
+                raise ValueError("Direction must be 'warming' or 'cooling'")
+            result = np.sum(mask, axis=2)
+            if self.set_mask:
+                result = np.ma.masked_where(self.im_mask == 0, result)
+            return result
+
+        DAYS_IN_YEAR = 366 if self.leap_year else 365
+        days = np.arange(DAYS_IN_YEAR)
+
+        # Interpolate daily temperature using polynomial fit
         interp_daily_temp = np.zeros((self.im_height, self.im_width, DAYS_IN_YEAR))
-        days = np.arange(0,DAYS_IN_YEAR)
         for i_row in range(self.im_height):
             for i_col in range(self.im_width):
                 temp_1D = self.meanT_daily[i_row, i_col, :]
-                # Creating quadratic spline fit to smoothen the time series along time dimension
-                quad_spl = np.poly1d(np.polyfit(days, temp_1D, 5))
-                interp_daily_temp[i_row, i_col, :] = quad_spl(days)
-        
-        # we will use the interpolated temperature time series to decide and count
-        meanT_daily_add1day = np.concatenate((interp_daily_temp, interp_daily_temp[:,:,0:1]), axis=-1)
-        meanT_first = meanT_daily_add1day[:,:,:-1]
-        meanT_diff = meanT_daily_add1day[:,:,1:] - meanT_daily_add1day[:,:,:-1]
+                poly_fit = np.poly1d(np.polyfit(days, temp_1D, 5))
+                interp_daily_temp[i_row, i_col, :] = poly_fit(days)
 
-        A9 = np.sum( np.logical_and(meanT_diff>0, meanT_first<-5), axis=2 )
-        A8 = np.sum( np.logical_and(meanT_diff>0, np.logical_and(meanT_first>=-5, meanT_first<0)), axis=2 )
-        A7 = np.sum( np.logical_and(meanT_diff>0, np.logical_and(meanT_first>=0, meanT_first<5)), axis=2 )
-        A6 = np.sum( np.logical_and(meanT_diff>0, np.logical_and(meanT_first>=5, meanT_first<10)), axis=2 )
-        A5 = np.sum( np.logical_and(meanT_diff>0, np.logical_and(meanT_first>=10, meanT_first<15)), axis=2 )
-        A4 = np.sum( np.logical_and(meanT_diff>0, np.logical_and(meanT_first>=15, meanT_first<20)), axis=2 )
-        A3 = np.sum( np.logical_and(meanT_diff>0, np.logical_and(meanT_first>=20, meanT_first<25)), axis=2 )
-        A2 = np.sum( np.logical_and(meanT_diff>0, np.logical_and(meanT_first>=25, meanT_first<30)), axis=2 )
-        A1 = np.sum( np.logical_and(meanT_diff>0, meanT_first>=30), axis=2 )
+        # Extend time series by one day to compute daily differences
+        extended_temp = np.concatenate((interp_daily_temp, interp_daily_temp[:, :, :1]), axis=-1)
+        meanT_first = extended_temp[:, :, :-1]
+        meanT_diff = extended_temp[:, :, 1:] - meanT_first
 
-        B9 = np.sum( np.logical_and(meanT_diff<0, meanT_first<-5), axis=2 )
-        B8 = np.sum( np.logical_and(meanT_diff<0, np.logical_and(meanT_first>=-5, meanT_first<0)), axis=2 )
-        B7 = np.sum( np.logical_and(meanT_diff<0, np.logical_and(meanT_first>=0, meanT_first<5)), axis=2 )
-        B6 = np.sum( np.logical_and(meanT_diff<0, np.logical_and(meanT_first>=5, meanT_first<10)), axis=2 )
-        B5 = np.sum( np.logical_and(meanT_diff<0, np.logical_and(meanT_first>=10, meanT_first<15)), axis=2 )
-        B4 = np.sum( np.logical_and(meanT_diff<0, np.logical_and(meanT_first>=15, meanT_first<20)), axis=2 )
-        B3 = np.sum( np.logical_and(meanT_diff<0, np.logical_and(meanT_first>=20, meanT_first<25)), axis=2 )
-        B2 = np.sum( np.logical_and(meanT_diff<0, np.logical_and(meanT_first>=25, meanT_first<30)), axis=2 )
-        B1 = np.sum( np.logical_and(meanT_diff<0, meanT_first>=30), axis=2 )
+        # Define temperature bins from warmest to coldest
+        bins = [(30, np.inf), (25, 30), (20, 25), (15, 20), (10, 15),
+                (5, 10), (0, 5), (-5, 0), (-np.inf, -5)]
 
-        if self.set_mask:
-            return [np.ma.masked_where(self.im_mask == 0, A1),
-                    np.ma.masked_where(self.im_mask == 0, A2),
-                    np.ma.masked_where(self.im_mask == 0, A3),
-                    np.ma.masked_where(self.im_mask == 0, A4),
-                    np.ma.masked_where(self.im_mask == 0, A5),
-                    np.ma.masked_where(self.im_mask == 0, A6),
-                    np.ma.masked_where(self.im_mask == 0, A7),
-                    np.ma.masked_where(self.im_mask == 0, A8),
-                    np.ma.masked_where(self.im_mask == 0, A9),
-                    np.ma.masked_where(self.im_mask == 0, B1),
-                    np.ma.masked_where(self.im_mask == 0, B2),
-                    np.ma.masked_where(self.im_mask == 0, B3),
-                    np.ma.masked_where(self.im_mask == 0, B4),
-                    np.ma.masked_where(self.im_mask == 0, B5),
-                    np.ma.masked_where(self.im_mask == 0, B6),
-                    np.ma.masked_where(self.im_mask == 0, B7),
-                    np.ma.masked_where(self.im_mask == 0, B8),
-                    np.ma.masked_where(self.im_mask == 0, B9)]
-        else:
-            return [A1, A2, A3, A4, A5, A6, A7, A8, A9, B1, B2, B3, B4, B5, B6, B7, B8, B9]
+        # Explicit variable names for warming transitions
+        A1 = compute_transition_counts(meanT_first, meanT_diff, *bins[0], "warming")
+        A2 = compute_transition_counts(meanT_first, meanT_diff, *bins[1], "warming")
+        A3 = compute_transition_counts(meanT_first, meanT_diff, *bins[2], "warming")
+        A4 = compute_transition_counts(meanT_first, meanT_diff, *bins[3], "warming")
+        A5 = compute_transition_counts(meanT_first, meanT_diff, *bins[4], "warming")
+        A6 = compute_transition_counts(meanT_first, meanT_diff, *bins[5], "warming")
+        A7 = compute_transition_counts(meanT_first, meanT_diff, *bins[6], "warming")
+        A8 = compute_transition_counts(meanT_first, meanT_diff, *bins[7], "warming")
+        A9 = compute_transition_counts(meanT_first, meanT_diff, *bins[8], "warming")
 
+        # Explicit variable names for cooling transitions
+        B1 = compute_transition_counts(meanT_first, meanT_diff, *bins[0], "cooling")
+        B2 = compute_transition_counts(meanT_first, meanT_diff, *bins[1], "cooling")
+        B3 = compute_transition_counts(meanT_first, meanT_diff, *bins[2], "cooling")
+        B4 = compute_transition_counts(meanT_first, meanT_diff, *bins[3], "cooling")
+        B5 = compute_transition_counts(meanT_first, meanT_diff, *bins[4], "cooling")
+        B6 = compute_transition_counts(meanT_first, meanT_diff, *bins[5], "cooling")
+        B7 = compute_transition_counts(meanT_first, meanT_diff, *bins[6], "cooling")
+        B8 = compute_transition_counts(meanT_first, meanT_diff, *bins[7], "cooling")
+        B9 = compute_transition_counts(meanT_first, meanT_diff, *bins[8], "cooling")
+
+        return [A1, A2, A3, A4, A5, A6, A7, A8, A9,
+                B1, B2, B3, B4, B5, B6, B7, B8, B9]
 
     def getLGP(self):
-        """Calculate length of growing period (LGP).
+        """
+        Calculates the Length of Growing Period (LGP) in days for each pixel.
 
-        Args:
-            None.
-        Return:
-           lgp (2D-NumPy Array): length of growing periods [Unit: Days].
-        """        
+        Returns:
+            np.ndarray: 2D array representing the number of days per pixel where:
+                        - Temperature is suitable for growth (based on `islgpt`)
+                        - Moisture is adequate (Eta/Etm ≥ 0.4)
+                        Units: Days
 
-        if self.leap_year:
-            DAYS_IN_YEAR = 366
-        else:
-            DAYS_IN_YEAR = 365
-
-        
+        Notes:
+            - Uses daily temperature and evapotranspiration data.
+            - Applies a 10-day smoothing via `val10day()` function.
+            - Extends the year to handle wrap-around growing seasons.
+            - NaN-safe: excludes invalid moisture ratio values from the count.
+            - Masked pixels are excluded from the result.
+        """
+        DAYS_IN_YEAR = 366 if self.leap_year else 365
         lgp_tot = np.zeros((self.im_height, self.im_width))
-        #============================
+
         for i_row in range(self.im_height):
             for i_col in range(self.im_width):
-                if self.set_mask:
-                    if self.im_mask[i_row, i_col] == self.nodata_val:
-                        continue
-                Etm365X = np.append(self.Etm365[i_row, i_col, :], self.Etm365[i_row, i_col, :])
-                Eta365X = np.append(self.Eta365[i_row, i_col, :], self.Eta365[i_row, i_col, :])
-                islgp = islgpt(self.meanT_daily[i_row, i_col, :])
-                xx = val10day(Eta365X)
-                yy = val10day(Etm365X)
-                lgp_whole = xx[:DAYS_IN_YEAR]/yy[:DAYS_IN_YEAR]
-                count = 0
-                for i in range(len(lgp_whole)):
-                    if islgp[i] == 1 and lgp_whole[i] >= 0.4:
-                        count = count+1
 
-                lgp_tot[i_row, i_col] = count
+                # Skip masked pixels
+                if self.set_mask and self.im_mask[i_row, i_col] == self.nodata_val:
+                    continue
 
-        if self.set_mask:
-            return np.where(self.im_mask, lgp_tot, np.nan)
-        else:
-            return lgp_tot
+                # Extend the year to handle wrap-around seasons
+                Etm_extended = np.append(self.Etm365[i_row, i_col, :], self.Etm365[i_row, i_col, :])
+                Eta_extended = np.append(self.Eta365[i_row, i_col, :], self.Eta365[i_row, i_col, :])
+
+                # Temperature suitability mask (1 = suitable, 0 = not)
+                temp_suitability = np.array(islgpt(self.meanT_daily[i_row, i_col, :]))
+
+                # Apply 10-day smoothing to Eta and Etm
+                Eta_10day = val10day(Eta_extended)
+                Etm_10day = val10day(Etm_extended)
+
+                # Compute moisture adequacy ratio safely (avoid division by zero)
+                moisture_ratio = np.divide(
+                    Eta_10day[:DAYS_IN_YEAR],
+                    Etm_10day[:DAYS_IN_YEAR],
+                    out=np.zeros_like(Eta_10day[:DAYS_IN_YEAR]),
+                    where=Etm_10day[:DAYS_IN_YEAR] != 0
+                )
+
+                # Create mask for valid (non-NaN) moisture values
+                valid_mask = ~np.isnan(moisture_ratio)
+
+                # Count days where both temperature and moisture are suitable
+                lgp_days = np.sum((temp_suitability == 1) & (moisture_ratio >= 0.4) & valid_mask)
+                lgp_tot[i_row, i_col] = lgp_days
+
+        # Apply mask if needed
+        return np.where(self.im_mask, lgp_tot, np.nan) if self.set_mask else lgp_tot
+
   
     def getLGPClassified(self, lgp): # Original PyAEZ source code
         """This function calculates the classification of moisture regimes based on LGP.
