@@ -780,6 +780,31 @@ class ClimateRegime(object):
 
         return [A1, A2, A3, A4, A5, A6, A7, A8, A9,
                 B1, B2, B3, B4, B5, B6, B7, B8, B9]
+    
+    def val10day_2years(arr):
+        """
+        Python equivalent of the Fortran subroutine val10day.
+        Computes a 10-day trailing average with wrap-around logic.
+        Returns an array of twice the input length: first half with averages,
+        second half as a duplicate of the first.
+        """
+        n = len(arr)
+        arr_padded = np.concatenate((arr[:9], arr))  # pad first 9 days from start
+        val10 = np.zeros(n * 2)
+
+        # Compute 10-day trailing average
+        for jd in range(9, n + 9):
+            window = arr_padded[jd - 9: jd + 1]  # 10-day window ending at jd
+            val10[jd] = np.mean(window)
+
+        # Wrap-around for first 9 days
+        for jd in range(9):
+            val10[jd] = val10[n + jd]
+
+        # Copy first year to second year
+        val10[n:] = val10[:n]
+
+        return val10
 
     def getLGP(self):
         """Calculate length of growing period (LGP).
@@ -789,13 +814,6 @@ class ClimateRegime(object):
         Return:
            lgp (2D-NumPy Array): length of growing periods [Unit: Days].
         """        
-
-        if self.leap_year:
-            DAYS_IN_YEAR = 366
-        else:
-            DAYS_IN_YEAR = 365
-
-        
         lgp_tot = np.zeros((self.im_height, self.im_width))
         #============================
         for i_row in range(self.im_height):
@@ -808,7 +826,7 @@ class ClimateRegime(object):
                 islgp = islgpt(self.meanT_daily[i_row, i_col, :])
                 xx = val10day(Eta365X)
                 yy = val10day(Etm365X)
-                lgp_whole = xx[:DAYS_IN_YEAR]/yy[:DAYS_IN_YEAR]
+                lgp_whole = xx[:365]/yy[:365]
                 count = 0
                 for i in range(len(lgp_whole)):
                     if islgp[i] == 1 and lgp_whole[i] >= 0.4:
