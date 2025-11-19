@@ -9,7 +9,123 @@ from types import MethodType
 # Ensure GDAL exceptions are raised
 gdal.UseExceptions()
 os.environ['PROJ_LIB'] = '/opt/conda/share/proj'
+
+def initialize_clim(
+    work_dir: str,
+    year: str,
+    country_name: str,
+    country_mask_name: str,
+    elevation_filename: str,
+    daily: bool = True,
+    mask_value: int = 1,
+):
+    """
+    Initialize and configure the ClimateRegime object for AEZ simulation.
+
+    Parameters:
+        work_dir (str): Working directory path.
+        year (str, optional): Year to filter time series (currently unused).
+        country_name (str, optional): Country name (currently unused).
+        country_mask_name (str): Filename of the country mask raster.
+        elevation_filename (str): Filename of the elevation raster.
+        daily (bool): Whether to use daily or monthly data.
+        mask_value (int): Value in mask representing the study area.
+
+    Returns:
+        ClimateRegime: Configured ClimateRegime object.
+    """
+    # Validate working directory
+    if not os.path.isdir(work_dir):
+        raise FileNotFoundError(f"Working directory not found: {work_dir}")
+
+    os.chdir(work_dir)
+    sys.path.append(work_dir)
+
+    # Ensure output folder exists
+    folder_path = os.path.join(work_dir, 'data_output', 'NB1')
+    os.makedirs(folder_path, exist_ok=True)
+
+    from pyaez import ClimateRegime
+
+    # Initialize ClimateRegime object
+    clim_reg = ClimateRegime.ClimateRegime()
+
+    # Load climate data
+    data_input = os.path.join(work_dir, 'data_input', 'CAVA_data')
+    climate_files = {
+        "tasmax": "tasmax.npy",
+        "tasmin": "tasmin.npy",
+        "pr": "pr.npy",
+        "hurs": "hurs.npy",
+        "sfcWind": "sfcWind.npy",
+        "rsds": "rsds.npy",
+        "time_array": "time_array.npy"
+    }
+
+    # Check all files exist
+    for key, fname in climate_files.items():
+        path = os.path.join(data_input, fname)
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Missing climate data file: {path}")
+
+    max_temp = np.load(os.path.join(data_input, climate_files["tasmax"]))
+    min_temp = np.load(os.path.join(data_input, climate_files["tasmin"]))
+    precipitation = np.load(os.path.join(data_input, climate_files["pr"]))
+    rel_humidity = np.load(os.path.join(data_input, climate_files["hurs"]))
+    wind_speed = np.load(os.path.join(data_input, climate_files["sfcWind"]))
+    short_rad = np.load(os.path.join(data_input, climate_files["rsds"]))
+    times = np.load(os.path.join(data_input, climate_files["time_array"]))
+
+    # Load mask and elevation
+    mask_path = os.path.join(work_dir, 'data_input', country_mask_name)
+    if not os.path.exists(mask_path):
+        raise FileNotFoundError(f"Mask file not found: {mask_path}")
+
+    mask_gdal = gdal.Open(mask_path)
+    mask = mask_gdal.ReadAsArray()
+
+    elevation_path = os.path.join(work_dir, 'data_input', elevation_filename)
+    if not os.path.exists(elevation_path):
+        raise FileNotFoundError(f"Elevation file not found: {elevation_path}")
+
+    elevation = gdal.Open(elevation_path).ReadAsArray()
+
+    # Extract geotransform and bounds
+    geotransform = mask_gdal.GetGeoTransform()
+    minx = geotransform[0]
+    miny = geotransform[3] + geotransform[5] * mask_gdal.RasterYSize
+    maxx = geotransform[0] + geotransform[1] * mask_gdal.RasterXSize
+    maxy = geotransform[3]
+
+    lat_min, lat_max = miny, maxy
+
+    # Configure ClimateRegime
+    clim_reg.setStudyAreaMask(mask, mask_value)
+    clim_reg.setLocationTerrainData(lat_min, lat_max, elevation)
+
+    red_times_idx = [i for i,t in enumerate(times) if year in str(t)]
     
+    # Set climate and soil water data
+    if daily:
+        if red_times_idx is None:
+            raise ValueError("red_times_idx must be provided for daily data.")
+        clim_reg.setClimateAndSoilWaterData(
+            min_temp[:, :, red_times_idx],
+            max_temp[:, :, red_times_idx],
+            precipitation[:, :, red_times_idx],
+            short_rad[:, :, red_times_idx],
+            wind_speed[:, :, red_times_idx],
+            rel_humidity[:, :, red_times_idx],
+            itflg=5
+        )
+    else:
+        clim_reg.setClimateAndSoilWaterData(
+            min_temp, max_temp, precipitation, short_rad, wind_speed, rel_humidity
+        )
+
+    return clim_reg
+
+
 def initialize_aez(work_dir, year, country_name, country_mask_name, elevation_filename, daily=True):
     """
     Initialize and configure the AEZ CropSimulation object.
@@ -311,7 +427,7 @@ def compute_yield(clim_con, condition_type, work_dir, country_name, year):
     # Yield maps
     if condition_type == "rainfed":
         yield_map = gdal.Open(os.path.join(work_dir, f'data_output/NB2/{country_name}_{crop_name}_yld_rain_{year}.tif')).ReadAsArray()
-    elif condition_type == "irrigted":
+    elif condition_type == "irrigated":
         yield_map = gdal.Open(os.path.join(work_dir, f'data_output/NB2/{country_name}_{crop_name}_yld_irr_{year}.tif')).ReadAsArray()
 
     # Agro-climatic indicators
@@ -346,4 +462,141 @@ def compute_yield(clim_con, condition_type, work_dir, country_name, year):
     fc3 = clim_con.getClimateReductionFactor()
 
     print(f"Computed {condition_type} yield for {crop_key} using {filename}")
+
+    '''visualize results'''
+    plt.figure(1, figsize=(22,9))
+    plt.subplot(1,3,1)
+    plt.imshow(yield_map_irr, vmax = np.max([clim_yield_irr, yield_map_irr]))
+    plt.colorbar(shrink=0.6)
+    plt.title(f'Original Irrigated Yield {crop_name}')
+    
+    plt.subplot(1,3,2)
+    plt.imshow(clim_yield_irr_maiz, vmax = np.max([clim_yield_irr, yield_map_irr]))
+    plt.colorbar(shrink=0.6)
+    plt.title(f'Climate Constrainted Irrigated Yield {crop_name}')
+    
+    plt.subplot(1,3,3)
+    plt.imshow(fc3_maiz_irr, vmax = 1)
+    plt.colorbar(shrink=0.6)
+    plt.title(f'Fc3 {crop_name} Irrigated')
+
+    return clim_yield, fc3
+
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+from osgeo import gdal
+
+def compute_yield(clim_con, condition_type, work_dir, country_name, year, plot_results=False):
+    """
+    Compute climate-adjusted yield and reduction factor for rainfed or irrigated conditions,
+    automatically selecting the correct input file based on crop name.
+
+    Parameters:
+        clim_con: Climatic constraints object (with methods setReductionFactors, applyClimaticConstraints, etc.)
+        condition_type (str): 'rainfed' or 'irrigated'.
+        work_dir (str): Working directory containing input/output data.
+        country_name (str): Country name for file paths.
+        year (int): Year for file paths.
+        plot_results (bool): If True, plots the original yield, adjusted yield, and reduction factor.
+
+    Returns:
+        tuple: (clim_yield, fc3) for the specified condition.
+    """
+    crop_name = clim_con.crop_name
+
+    # Validate condition type
+    if condition_type not in ["rainfed", "irrigated"]:
+        raise ValueError("condition_type must be 'rainfed' or 'irrigated'")
+
+    # Map crop names to file paths
+    crop_files = {
+        'maize': (
+            r'./data_input/input_module3/Maize (tropical lowland  cultivars)_High_ir_lst.xlsx',
+            r'./data_input/input_module3/Maize (tropical lowland  cultivars)_High_rf_lst.xlsx'
+        ),
+        'rice': (
+            r'./data_input/input_module3/Indica wetland rice_High_ir_lst.xlsx',
+            r'./data_input/input_module3/Indica wetland rice_High_rf_lst.xlsx'
+        ),
+        'soybean': (
+            r'./data_input/input_module3/Soybean (tropical and subtropical cultivars)_High_ir_lst.xlsx',
+            r'./data_input/input_module3/Soybean (tropical and subtropical cultivars)_High_rf_lst.xlsx'
+        ),
+        'cassava': (
+            r'./data_input/input_module3/Cassava_High_ir_lst.xlsx',
+            r'./data_input/input_module3/Cassava_High_rf_lst.xlsx'
+        ),
+        'cashew': (
+            r'./data_input/input_module3/Cashew_High_ir_lst.xlsx',
+            r'./data_input/input_module3/Cashew_High_rf_lst.xlsx'
+        ),
+        'cocoa': (
+            r'./data_input/input_module3/Cocoa_High_ir_lst.xlsx',
+            r'./data_input/input_module3/Cocoa_High_rf_lst.xlsx'
+        ),
+        'coffee': (
+            r'./data_input/input_module3/Coffee_robusta_High_ir_lst.xlsx',
+            r'./data_input/input_module3/Coffee_robusta_High_rf_lst.xlsx'
+        )
+    }
+
+    # Load yield map
+    if condition_type == "rainfed":
+        yield_map = gdal.Open(os.path.join(work_dir, f'data_output/NB2/{country_name}_{crop_name}_yld_rain_{year}.tif')).ReadAsArray()
+    else:
+        yield_map = gdal.Open(os.path.join(work_dir, f'data_output/NB2/{country_name}_{crop_name}_yld_irr_{year}.tif')).ReadAsArray()
+
+    # Load agro-climatic indicators
+    lgp = gdal.Open(os.path.join(work_dir, f'data_output/NB1/{country_name}_LGP_{year}.tif')).ReadAsArray()
+    lgp10 = gdal.Open(os.path.join(work_dir, f'data_output/NB1/{country_name}_LGPt10_{year}.tif')).ReadAsArray()
+    lgp_equv = gdal.Open(os.path.join(work_dir, f'data_output/NB1/{country_name}_LGPEquivalent_{year}.tif')).ReadAsArray()
+
+    # Normalize crop name
+    crop_key = crop_name.replace('_H', '').lower()
+    if crop_key not in crop_files:
+        raise ValueError(f"Unsupported crop name: {crop_key}")
+
+    filename_ir, filename_rf = crop_files[crop_key]
+    filename = filename_ir if condition_type == "irrigated" else filename_rf
+
+    # Apply reduction factors and constraints
+    clim_con.setReductionFactors(file_path=filename)
+    clim_con.applyClimaticConstraints(
+        yield_input=yield_map,
+        lgp=lgp,
+        lgp_equv=lgp_equv,
+        lgpt10=lgp10,
+        omit_yld_0=True
+    )
+
+    # Get results
+    clim_yield = clim_con.getClimateAdjustedYield()
+    fc3 = clim_con.getClimateReductionFactor()
+
+    print(f"Computed {condition_type} yield for {crop_key} using {filename}")
+
+    # Optional plotting
+    if plot_results:
+        vmax_yield = np.max([np.nanmax(clim_yield), np.nanmax(yield_map)])
+        plt.figure(figsize=(22, 9))
+
+        plt.subplot(1, 3, 1)
+        plt.imshow(yield_map, vmax=vmax_yield)
+        plt.colorbar(shrink=0.6)
+        plt.title(f'Original {condition_type.capitalize()} Yield ({crop_name})')
+
+        plt.subplot(1, 3, 2)
+        plt.imshow(clim_yield, vmax=vmax_yield)
+        plt.colorbar(shrink=0.6)
+        plt.title(f'Climate-Constrained Yield ({crop_name})')
+
+        plt.subplot(1, 3, 3)
+        plt.imshow(fc3, vmax=1)
+        plt.colorbar(shrink=0.6)
+        plt.title(f'Reduction Factor Fc3 ({crop_name})')
+
+        plt.tight_layout()
+        plt.show()
+
     return clim_yield, fc3
