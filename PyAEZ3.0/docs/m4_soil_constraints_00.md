@@ -1,6 +1,6 @@
 # PyAEZ v3.0 (2025) — Module 4: Soil Constraints (Part 1)
 
-Extract HWSD v2 Soil Mapping Units (SMUs) for a user-defined Area of Interest (AOI) across seven layers (D1–D7), clean attributes, and export layer tables for downstream evaluation.
+Extract HWSD v2 Soil Mapping Units (SMUs) and slope classes for a user-defined Area of Interest (AOI) across seven layers (D1–D7), clean attributes, and export layer tables for downstream evaluation.
 
 
 ## Authors / credits
@@ -14,18 +14,20 @@ Extract HWSD v2 Soil Mapping Units (SMUs) for a user-defined Area of Interest (A
 
 ## Summary
 
-This module clips the HWSD raster to an AOI, extracts unique SMUs, joins them to the HWSD attribute workbook, applies light cleaning and transformations, and writes Topsoil (D1–D3) and Subsoil (D4–D7) Excel workbooks. Optional QC images are saved for quick visual checks.
+This module clips the HWSD raster to an AOI, extracts unique SMUs, and corresponding soil slope classes, joins them to the HWSD attribute workbook, applies light cleaning and transformations, and writes Topsoil (D1–D3) and Subsoil (D4–D7) Excel workbooks. Optional QC images are saved for quick visual checks.
 
 ## Key updates (v3.0)
 
 1. Data source harmonized to the latest HWSD release:https://data.apps.fao.org/catalog/iso/ff5c613c-75bb-46a9-a162-bc728059b465 
 2. AOI-based SMU extraction implemented for seven soil layers D1–D7: D1 (0-20 cm), D2 (20-40 cm), D3 (40-60 cm), D4 (60-80 cm), D5 (80-100 cm), D6 (100-150 cm), and D7 (150-200 cm).
+3. implemented slope classes which are extracted from the global slope database as https://data.apps.fao.org/catalog//iso/44950f32-a84d-4784-ac50-1148beeb8597
 
 ## Inputs
 
 * HWSD2 raster (`HWSD2_RASTER/HWSD2.bil` with `.hdr/.prj/.stx`)
-* AOI boundary (vector, CRS defined)
-* HWSD attribute workbook (`HWSD2_LAYERS.xlsx`, sheet: `HWSD2_LAYERS`)
+* AOI boundary (shape file)
+* HWSD attribute workbook (`HWSD2_LAYERS.xlsx`, sheet: `HWSD2_LAYERS_2`)
+* SOILFER.SLOPE-MED.tif 
 
 ## Outputs
 
@@ -33,15 +35,23 @@ This module clips the HWSD raster to an AOI, extracts unique SMUs, joins them to
 * `Sub_Soil_Layers.xlsx` (D4–D7)
 * `Raster_and_AOI_Boundary_Check.png` (optional QC)
 * `Clipped_Raster_Check.png` (optional QC)
+* "Clipped_Slope_Check.png" (optional QC)
 
 ## Dependencies
 
+* from pathlib import Path (reading directory)
+* import os, sys (reading directory)
 * rasterio (raster IO, masking)
 * geopandas (vector IO, CRS handling)
 * pandas, numpy (tabular processing)
 * shapely (geometry mapping for masks)
 * matplotlib (QC plots; Agg backend)
 * openpyxl (Excel writer)
+* from rasterio.mask import mask
+* from shapely.geometry import mapping
+* from rasterio.warp import reproject, Resampling
+* import warnings
+* from matplotlib import colors
 
 ## Install (tip)
 
@@ -57,24 +67,36 @@ pip install pandas numpy matplotlib openpyxl
 Set paths under “User inputs” in the script.
 
 ```python
-from pathlib import Path
+try:
+    WORKING_DIR = Path(__file__).resolve().parent
+except NameError:
+    WORKING_DIR = Path.cwd()
 
-WORKING_DIR = Path(r"C:\...\PyAEZ\code\Soil_constraints")
-RASTER_PATH  = WORKING_DIR / "HWSD2_RASTER/HWSD2.bil"
-EXCEL_PATH   = WORKING_DIR / "HWSD2_LAYERS.xlsx"        # sheet: HWSD2_LAYERS
-SHAPE_PATH   = WORKING_DIR / "Ghana/Ghana.shp"          # your AOI
+# -----------------------------
+# User inputs
+# -----------------------------
+RASTER_PATH = WORKING_DIR / "hwsd2_raster" / "HWSD2.bil"
+EXCEL_PATH  = WORKING_DIR / "HWSD2_LAYERS_2.xlsx"   # new HWSD layer file
+SHAPE_PATH  = WORKING_DIR / "Tanzania" / "Tanzania.shp"
+SLOPE_TIF   = WORKING_DIR / "SOILFER.SLOPE-MED.tif"  # categorical slope classes 0..10
 
-OUT_TOPSOIL  = WORKING_DIR / "Top_Soil_Layers.xlsx"
-OUT_SUBSOIL  = WORKING_DIR / "Sub_Soil_Layers.xlsx"
+# -----------------------------
+# Output files
+# -----------------------------
+OUT_TOPSOIL       = WORKING_DIR / "Top_Soil_Layers.xlsx"
+OUT_SUBSOIL       = WORKING_DIR / "Sub_Soil_Layers.xlsx"
 QC_RASTER_AOI_PNG = WORKING_DIR / "Raster_and_AOI_Boundary_Check.png"
 QC_CLIP_PNG       = WORKING_DIR / "Clipped_Raster_Check.png"
+QC_SLOPE_PNG      = WORKING_DIR / "Clipped_Slope_Check.png"
+OUT_SLP_CSV       = WORKING_DIR / "SMU_SLOPE_CLASSES.csv"
+
 ```
 
 ## Workflow
 
 ### 1) Verify inputs
 
-The script checks that all required inputs exist— the global 30-arc-second (~1 km) HWSD v2 raster of Soil Mapping Unit (SMU) IDs, the AOI shapefile (your area of interest), and the HWSD soil layers Excel file— and raises a clear error if any are missing.
+The script checks that all required inputs exist— the global 30-arc-second (~1 km) HWSD v2 raster of Soil Mapping Unit (SMU) IDs, the AOI shapefile (your area of interest), global slope map and the HWSD soil layers Excel file— and raises a clear error if any are missing.
 
 ### 2) Load raster and AOI; align CRS
 
@@ -140,8 +162,8 @@ SPR, SPH, ROOTS, IL, DRG, ESP, EC, CCB, GYP, GRC, VSP, LAYER, SHARE
 
 Write two multi-sheet files:
 
-* `Top_Soil_Layers.xlsx` with D1–D3
-* `Sub_Soil_Layers.xlsx` with D4–D7
+* `Top_Soil_Layers.xlsx` with D1
+* `Sub_Soil_Layers.xlsx` with D2–D7
 
 Each sheet contains the standardized columns for its layer.
 
