@@ -31,8 +31,8 @@ This module clips the HWSD raster to an AOI, extracts unique SMUs, and correspon
 
 ## Outputs
 
-* `Top_Soil_Layers.xlsx` (D1–D3)
-* `Sub_Soil_Layers.xlsx` (D4–D7)
+* `Top_Soil_Layers.xlsx` (D1)
+* `Sub_Soil_Layers.xlsx` (D2–D7)
 * `Raster_and_AOI_Boundary_Check.png` (optional QC)
 * `Clipped_Raster_Check.png` (optional QC)
 * "Clipped_Slope_Check.png" (optional QC)
