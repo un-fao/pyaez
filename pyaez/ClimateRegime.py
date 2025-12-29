@@ -23,13 +23,14 @@ From Version 3.0:
 2. Reviewed and refined water balance calculations.
 """
 
-
 import numpy as np
 from pyaez.UtilitiesCalc import generateLatitudeMap, interpMonthlyToDaily, averageDailyToMonthly
 from pyaez.ETOCalc import calculateETONumba, calculateNetRadiationFlux
 from pyaez.LGPCalc import psh, RefWaterBalanceCalc, rainPeak, islgpt, val10day, search_cycles
 from pyaez.ThermalScreening import getTempTrend, getSmoothTemp, getTemperatureGrowingPeriod
-   
+from typing import List, Tuple
+
+
 np.seterr(divide='ignore', invalid='ignore') # ignore "divide by zero" or "divide by NaN" warning
 np.round_ = np.round
 
@@ -1775,132 +1776,6 @@ class ClimateRegime(object):
             npp =  np.sum(self.Eta365, axis = 2) * rdi * np.exp(- np.sqrt(9.87+(6.25*rdi))) * 1000
         
         return np.round(npp, 1)
-
-    def getLGPlongest(self):
-        """
-        Calculate the total growing days of the longest cycle in a single year.
-        
-        Args:
-            None.
-        Return:
-            lgb [2-D NumPy Array]: total growing periods of the longest LGP cycle. [Unit: Days]
-        """
-
-        lgb = np.zeros((self.im_height, self.im_width), dtype = int)
-
-        eta = self.Eta365.copy()
-        etm = self.Etm365.copy()
-        Tm = self.meanT_daily.copy()
-
-        for i in range(self.im_height):
-            for j in range(self.im_width):
-
-                if self.set_mask:
-                    if self.im_mask[i, j]== self.nodata_val:
-                        continue
-                
-                islgp = islgpt(Tm[i,j,:])
-                xx = val10day(eta[i,j,:])
-                yy = val10day(etm[i,j,:])
-
-                # etamin = np.nanmin(xx)
-                # etamax = np.nanmax(xx)
-
-                # etaminidx = np.argmin(xx)
-                # etamaxidx = np.argmax(xx)
-
-                # zz = etamin + 
-
-                lgp_whole = np.divide(xx, yy, where= yy>0, out = np.ones(xx.shape))
-
-                count = []
-
-                for k in range(len(lgp_whole)):
-                    if islgp[k] == 1 and lgp_whole[k] >=0.4:
-                        count.append(1)
-                    else:
-                        count.append(0)
-                
-
-                # find the length of the LGP cycles
-                lgp_components = search_cycles(count)
-                
-                # if there are no growing periods year-round, skip calculation.
-                if len(lgp_components[0])==0:
-                    lgb[i,j] = 0
-                else:
-                    # find the longest component
-                    sum_list = []
-                    
-                    for k in range(len(lgp_components[0])):
-                        sum_list.append(sum(lgp_components[0][k]))
-                    lgb[i,j] = int(np.nanmax(sum_list))
-                
-        return lgb
-    
-    def getLGPlongestBeginDate(self):
-        """
-        Calculate the the beginning day of the longest LGP cycle in a single year frame.
-        
-        Args:
-            None.
-        Return:
-            lgb_d [2-D NumPy Array]: beginning day of total growing days of the longest. [Unit: DOY]
-        """
-
-        lgb_d = np.zeros((self.im_height, self.im_width), dtype = int)
-
-        eta = self.Eta365.copy()
-        etm = self.Etm365.copy()
-        Tm = self.meanT_daily.copy()
-
-        for i in range(self.im_height):
-            for j in range(self.im_width):
-                
-                # print(f'Row {i}, Col {j}')
-                if self.set_mask:
-                    if self.im_mask[i, j]== self.nodata_val:
-                        continue
-                
-                islgp = islgpt(Tm[i,j,:])
-                xx = val10day(eta[i,j,:])
-                yy = val10day(etm[i,j,:])
-                lgp_whole = np.divide(xx, yy, where= yy>0, out = np.ones(xx.shape))
-
-                count = []
-
-                for k in range(len(lgp_whole)):
-                    if islgp[k] == 1 and lgp_whole[k] >=0.4:
-                        count.append(1)
-                    else:
-                        count.append(0)
-                
-                # if there are no growing days year-round, skip cycle searching
-                if sum(count) ==0:
-                    continue
-                # find the length of the cycles
-                lgp_components = search_cycles(count)
-
-                # if there are no growing periods year-round, skip calculation.
-                if len(lgp_components[0])==0:
-                    lgb_d[i,j] = 0
-                else:
-                    # find all days of each cycle
-                    sum_list = []
-                    
-                    for k in lgp_components[0]:
-                        if len(k) ==0:
-                            sum_list.append(0)
-                        else:
-                            sum_list.append(sum(k))
-                    
-                    # change the list into numpy array for possible error occurrence
-                    sum_list = np.array(sum_list)
-                    lgp_bd = lgp_components[1]
-                    idx = np.argwhere(sum_list == np.nanmax(sum_list))[0][0]
-                    lgb_d[i,j] = lgp_bd[idx] +1
-
-        return lgb_d
     
     def getBeginningDateofHibernationPeriod(self):
         """
@@ -1996,4 +1871,445 @@ class ClimateRegime(object):
                 lgh[i,j] = np.nansum(dormancy_days)
         
         return lgh
+
+    ### Dario Spiller additional functions for the revised evaluation of LGP
+
+    def moving_avg_10day(self, x):
+        """
+        10-day moving average like Fortran val10day(0, MD365, ...)
+        - circular convolution over the year (wrap around)
+        - returns an array of length MD365
+        """
+        MD365 = x.shape[-1]
+        # duplicate year for wrap-around, then apply window
+        x2 = np.concatenate([x, x[:10]], axis=-1)  # extra 10 days for trailing window
+        # sliding mean with window size 10, center-aligned to the last day in window
+        # emulate Fortran's day i referring to the average ending at i
+        out = np.empty(MD365, dtype=np.float32)
+        for i in range(MD365):
+            # average of days i-9..i (modulo)
+            start = i
+            end = i + 10
+            out[i] = np.nanmean(x2[start:end])
+        return out
+    
+    def normalize_day(self, d, MD365=365):
+        """Fortran setdat(): bring day index back into [1..MD365]; Python returns [0..MD365-1]."""
+        return ((d % MD365) + MD365) % MD365
+    
+    def detect_dormancy(self, islgpt):
+        """
+        Approximate Fortran dormancy detection.
+        Returns begdrm (start index), enddrm (end index) in [0..364].
+        If no dormancy, returns (None, None).
+        """
+        MD365 = len(islgpt)
+        # We look for a contiguous block of islgpt==0 bounded by 1s
+        # Track transitions 1->0 (start) and 0->1 (end)
+        prev = islgpt[-1]
+        beg = None
+        end = None
+        for i in range(MD365):
+            cur = islgpt[i]
+            if prev == 1 and cur == 0 and beg is None:
+                beg = i           # first non-growing after growing
+            if prev == 0 and cur == 1 and beg is not None and end is None:
+                end = i - 1       # last non-growing before growing resumes
+            prev = cur
+        # if we started dormancy but never ended before year-end, check wrap-around
+        if beg is not None and end is None:
+            # if year ends in dormancy, end is last 0 before next year's first 1.
+            # For simplicity, if entire year is 0s, no dormancy used.
+            if np.all(islgpt == 0):
+                beg, end = None, None
+            else:
+                # Find first 1; we already scanned, so if first day is 1 then end is day before beg
+                first_one = np.where(islgpt == 1)[0]
+                if len(first_one) > 0:
+                    end = (beg - 1) % MD365
+        return beg, end
+    
+    def merge_small_gaps(self, components, MD365 = 365, mdbreak = 10):
+        """
+        Merge consecutive components when the gap between them is <= mdbreak,
+        then normalize output to day-of-year (0..MD365-1) with correct (non-negative) lengths.
+    
+        Parameters
+        ----------
+        components : list of (beg, end, length, ndwet, ndpet)
+            beg, end in 0..MD365-1. If a component spans year end, 'end' < 'beg'.
+            'length' in the input will be recomputed from extended indices.
+        MD365 : int
+            Number of days in the (reference) year. Default 365.
+        mdbreak : int
+            Maximum gap (days) between components to merge.
+    
+        Returns
+        -------
+        merged : list of (beg0, end0, length, ndwet, ndpet)
+            beg0/end0 normalized to 0..MD365-1, 'length' computed in extended space (always >= 1).
+        """
+        if not components:
+            return []
+    
+        # 1) Convert to extended indices (handle wrap-around) and discard input 'length'
+        ext = []
+        for beg, end, _length_in, ndwet, ndpet in components:
+            if end >= beg:
+                beg_ext, end_ext = beg, end
+            else:
+                # spans across year end: extend end by +MD365
+                beg_ext, end_ext = beg, end + MD365
+            ext.append((beg_ext, end_ext, ndwet, ndpet))
+    
+        # 2) Sort by extended start and merge small gaps in extended domain
+        ext.sort(key=lambda c: c[0])
+        merged_ext = [ext[0]]
+        for b, e, ndw, ndp in ext[1:]:
+            B, E, NDW, NDP = merged_ext[-1]
+            gap = b - E - 1
+            if gap <= mdbreak:
+                # merge with previous: extend end, sum counters
+                merged_ext[-1] = (B, e, NDW + ndw, NDP + ndp)
+            else:
+                merged_ext.append((b, e, ndw, ndp))
+    
+        # 3) Optional wrap-around merge (last with first) across year end
+        if len(merged_ext) > 1:
+            B1, E1, NDW1, NDP1 = merged_ext[0]
+            BL, EL, NDWL, NDPL = merged_ext[-1]
+            gap_wrap = (B1 + MD365) - EL - 1
+            if gap_wrap <= mdbreak:
+                # merge last->first into one continuous component
+                merged_ext = [(BL, E1 + MD365, NDWL + NDW1, NDPL + NDP1)]
+    
+        # 4) Normalize back to day-of-year and compute length from extended indices
+        result = []
+        for B, E, NDW, NDP in merged_ext:
+            length = (E - B + 1)  # guaranteed non-negative in extended space
+            beg0 = B % MD365
+            end0 = E % MD365
+            result.append((beg0, end0, int(length), int(NDW), int(NDP)))
+    
+        return result
+    
+    def getLGPlongest(self,
+                      RPlim1=None, RPlim2=None, RPlim3=None,
+                      MDBREAK=10, lenmin=30, PHENSTART=0.25):
+        """
+        Compute the length (days) of the longest growing period (LGP) for each pixel,
+        following the IIASA LGP algorithm (Fortran in LGP.txt) once daily balances are available.
+    
+        Inputs expected on `self`:
+          - self.Eta365: (H, W, 365) actual evapotranspiration [mm/day]
+          - self.Etm365: (H, W, 365) maximum evapotranspiration [mm/day]
+          - self.meanT_daily or self.islgpt: (H, W, 365) temperature-based growing season flag (1/0)
+          - Optional: self.totalPrec_daily: (H, W, 365) precipitation [mm/day]
+    
+        Parameters:
+          - RPlim1: start/continue criterion as fraction of ETm for ETa (default deduced or 0.4)
+          - RPlim2: end criterion as fraction of ETm for ETa (default deduced or 0.4)
+          - RPlim3: rainfall start criterion as fraction of ETm (default deduced or 0.0 if no rainfall)
+          - MDBREAK: maximum days between components to be merged (default 10)
+          - lenmin: minimum component length to keep (default 30)
+          - PHENSTART: 0.25 (phenology start at 25% of ETm range for year-round case)
+    
+        Returns:
+          - lgp_longest: (H, W) int, length (days) of the longest growing period.
+          - lgp_beginday: (H, W) int, starting day of the longest growing period.
+        """
+        H, W, MD365 = self.Eta365.shape
+        assert MD365 == 365 or MD365 == 366, "Expected 365-days or 366-days inputs."
+    
+        # Determine flags: islgpt (1 growing-temperature season, 0 otherwise)
+        if hasattr(self, "islgpt365"):
+            islgpt_arr = self.islgpt365
+        else:
+            if not hasattr(self, "meanT_daily"):
+                raise ValueError("Provide either self.islgpt365 or self.meanT_daily + islgpt().")
+            islgpt_arr = np.zeros_like(self.meanT_daily, dtype=np.int8)
+            # Fallback: consider growing if mean T >= 5°C (approximate Fortran Ta >= 5 threshold)
+            islgpt_arr = (self.meanT_daily >= 5.0).astype(np.int8)
+    
+        # Rainfall optional
+        has_rain = hasattr(self, "totalPrec_daily") and (self.totalPrec_daily is not None)
+    
+        # Default thresholds: prefer class/crop-config if present, else safe defaults
+        if RPlim1 is None:
+            RPlim1 = getattr(self, "RPlim1", 0.4)  # typical crop start/continue
+        if RPlim2 is None:
+            RPlim2 = getattr(self, "RPlim2", RPlim1)  # end when ETa falls below same fraction
+        if RPlim3 is None:
+            RPlim3 = getattr(self, "RPlim3", 0.3 if has_rain else 0.0)  # like Fortran: 0 after cold-break
+    
+        lgp_longest = np.zeros((H, W), dtype=np.int32)
+        lgp_beginday = np.zeros((H, W), dtype=np.int32)
+    
+        # Main loops over pixels (keep clear logic; vectorization is possible later)
+        for i in range(H):
+            for j in range(W):
+                # mask    
+                if getattr(self, "set_mask", False):
+                    if self.im_mask[i, j] == self.nodata_val:
+                        continue
+    
+                # 10-day averages
+                xx = self.moving_avg_10day(self.Eta365[i, j, :])  # ETa 10-day
+                yy = self.moving_avg_10day(self.Etm365[i, j, :])  # ETm 10-day
+                if has_rain:
+                    zz = self.moving_avg_10day(self.totalPrec_daily[i, j, :])  # rain 10-day
+                else:
+                    zz = np.zeros_like(xx)
+    
+                islgp = islgpt_arr[i, j, :].astype(np.int8)
+    
+                # Duplicate the year for scanning across boundaries
+                xx2 = np.concatenate([xx, xx])       # length 730
+                yy2 = np.concatenate([yy, yy])
+                zz2 = np.concatenate([zz, zz])
+                islgp2 = np.concatenate([islgp, islgp])
+    
+                # ---- Fortran: scan for first break day to set scanning window (istrt0, istrt1) ----
+                # "break" means a day failing season or ETa < RPlim2 * ETm
+                istrt0 = None
+                for d in range(MD365):
+                    if (islgp[d] == 0) or (yy[d] > 0 and xx[d] < yy[d] * RPlim2):
+                        istrt0 = (d + 1) % MD365
+                        break
+                if istrt0 is None:
+                    # Year-round case: no break
+                    # Fortran: set lgp = full year and pick phenology start at 25% of ETm range
+                    ETmin = np.nanmin(yy)
+                    ETmax = np.nanmax(yy)
+                    zz_thr = ETmin + PHENSTART * (ETmax - ETmin)
+    
+                    # Find first day after ETm rises above threshold scanning from min position
+                    jETmn = int(np.nanargmin(yy))
+                    beglgp = None
+                    for k in range(jETmn, jETmn + MD365):
+                        if yy[k % MD365] >= zz_thr:
+                            beglgp = k % MD365
+                            break
+                    # If humid all-year you may set LGP=366 in Fortran; here we keep MD365.
+                    lgp_longest[i, j] = MD365
+                    continue
+    
+                # scanning window over two-year sequence
+                start_idx = istrt0      # 0..364
+                end_idx = start_idx + MD365 - 1
+                
+                # ---- Fortran: dormancy detection and rainfall-start suppression right after dormancy ----
+                begdrm, enddrm = self.detect_dormancy(islgp)
+                # map to the 730-day window indexes if present
+                enddrm0 = None if enddrm is None else enddrm
+                components = []
+                in_lgp = False
+                cur_beg = None
+                ndwet = 0   # rainy >= ETm
+                ndpet = 0   # ETa >= ETm
+    
+                # Iterate over 2-year window (indices in 0..729)
+                for t in range(start_idx, end_idx):  # MD365 days scanned within 2-year arrays - np.minimum(end_idx + MD365, MD365*2 - 1)
+                    ii = t  # absolute index
+                    day_mod = ii % MD365
+    
+                    xx_t = xx2[ii]
+                    yy_t = yy2[ii]
+                    zz_t = zz2[ii]
+                    is_season = islgp2[ii] == 1
+    
+                    # Determine rainfall start limit (RPl3): suppress right after dormancy end
+                    if begdrm is not None and enddrm is not None:
+                        after_cold_break = (day_mod == (enddrm + 1) % MD365) or (day_mod == (enddrm0 + 1) % MD365)
+                    else:
+                        after_cold_break = False
+                    RPl3_use = 0.0 if after_cold_break else RPlim3
+    
+                    # Check LGP start condition (Fortran: islgpt==1 and ETa>=RPlim1*ETm and rain>=RPl3*ETm)
+                    start_ok = (is_season and
+                                (yy_t <= 0 or xx_t >= yy_t * RPlim1) and
+                                (yy_t <= 0 or zz_t >= yy_t * RPl3_use))
+    
+                    end_ok = (not is_season) or (yy_t > 0 and xx_t < yy_t * RPlim2)
+    
+                    if not in_lgp and start_ok:
+                        in_lgp = True
+                        cur_beg = ii
+                        ndwet = 0
+                        ndpet = 0
+    
+                    elif in_lgp and end_ok:
+                        in_lgp = False
+                        cur_end = ii - 1
+                        # record component in day-of-year coordinates (0..364)
+                        beg_d = cur_beg % MD365
+                        end_d = cur_end % MD365
+                        # length across possible wrap inside window
+                        length = (cur_end - cur_beg + 1)
+                        components.append((beg_d, end_d, length, ndwet, ndpet))
+    
+                    # accumulate day types while inside LGP
+                    if in_lgp:
+                        if yy_t > 0 and zz_t >= yy_t:   # rainy day >= ETm
+                            ndwet += 1
+                            ndpet += 1
+                        elif yy_t > 0 and xx_t >= yy_t: # ETa >= ETm (PET-satisfied)
+                            ndpet += 1
+    
+                # Close trailing component if we finished inside LGP
+                if in_lgp and cur_beg is not None:
+                    cur_end = end_idx + MD365 - 1
+                    beg_d = cur_beg % MD365
+                    end_d = cur_end % MD365
+                    length = (cur_end - cur_beg + 1) % MD365
+                    components.append((beg_d, end_d, length, ndwet, ndpet))
+
+                # ---- Fortran: merge components with small gaps (MDBREAK) including wrap-around ----
+                components = self.merge_small_gaps(components, MD365=MD365, mdbreak=MDBREAK)
+
+                # ---- Fortran: discard components shorter than lenmin ----
+                components = [c for c in components if c[2] >= lenmin]
+
+                if not components:
+                    lgp_longest[i, j] = 0
+                    continue
+    
+                # ---- Fortran: sort by length (descending) and pick longest ----
+                components.sort(key=lambda c: c[2], reverse=True)
+                longest = components[0]
+                lgp_longest[i, j] = int(longest[2])
+                lgp_beginday[i, j] = int(longest[0])
+                
+        return lgp_longest, lgp_beginday
+
+#---------------- Previos version 2.3 ------------------
+
+    def getLGPlongest_ver2(self):
+        """
+        Calculate the total growing days of the longest cycle in a single year.
+        
+        Args:
+            None.
+        Return:
+            lgp_longest [2-D NumPy Array]: total growing periods of the longest LGP cycle. [Unit: Days]
+        """
+
+        lgp_longest = np.zeros((self.im_height, self.im_width), dtype = int)
+
+        eta = self.Eta365.copy()
+        etm = self.Etm365.copy()
+        Tm = self.meanT_daily.copy()
+
+        for i in range(self.im_height):
+            for j in range(self.im_width):
+
+                if self.set_mask:
+                    if self.im_mask[i, j]== self.nodata_val:
+                        continue
+                
+                islgp = islgpt(Tm[i,j,:])
+                xx = val10day(eta[i,j,:])
+                yy = val10day(etm[i,j,:])
+
+                # etamin = np.nanmin(xx)
+                # etamax = np.nanmax(xx)
+
+                # etaminidx = np.argmin(xx)
+                # etamaxidx = np.argmax(xx)
+
+                # zz = etamin + 
+
+                lgp_whole = np.divide(xx, yy, where= yy>0, out = np.ones(xx.shape))
+
+                count = []
+
+                for k in range(len(lgp_whole)):
+                    if islgp[k] == 1 and lgp_whole[k] >=0.4:
+                        count.append(1)
+                    else:
+                        count.append(0)
+                
+
+                # find the length of the LGP cycles
+                lgp_components = search_cycles(count)
+                
+                # if there are no growing periods year-round, skip calculation.
+                if len(lgp_components[0])==0:
+                    lgp_longest[i,j] = 0
+                else:
+                    # find the longest component
+                    sum_list = []
+                    
+                    for k in range(len(lgp_components[0])):
+                        sum_list.append(sum(lgp_components[0][k]))
+                    lgp_longest[i,j] = int(np.nanmax(sum_list))
+                
+        return lgp_longest
+    
+    def getLGPlongestBeginDate(self):
+        """
+        Calculate the the beginning day of the longest LGP cycle in a single year frame.
+        
+        Args:
+            None.
+        Return:
+            lgp_longest_d [2-D NumPy Array]: beginning day of total growing days of the longest. [Unit: DOY]
+        """
+
+        lgp_longest_d = np.zeros((self.im_height, self.im_width), dtype = int)
+
+        eta = self.Eta365.copy()
+        etm = self.Etm365.copy()
+        Tm = self.meanT_daily.copy()
+
+        for i in range(self.im_height):
+            for j in range(self.im_width):
+                
+                # print(f'Row {i}, Col {j}')
+                if self.set_mask:
+                    if self.im_mask[i, j]== self.nodata_val:
+                        continue
+                
+                islgp = islgpt(Tm[i,j,:])
+                xx = val10day(eta[i,j,:])
+                yy = val10day(etm[i,j,:])
+                lgp_whole = np.divide(xx, yy, where= yy>0, out = np.ones(xx.shape))
+
+                count = []
+
+                for k in range(len(lgp_whole)):
+                    if islgp[k] == 1 and lgp_whole[k] >=0.4:
+                        count.append(1)
+                    else:
+                        count.append(0)
+                
+                # if there are no growing days year-round, skip cycle searching
+                if sum(count) ==0:
+                    continue
+                # find the length of the cycles
+                lgp_components = search_cycles(count)
+
+                # if there are no growing periods year-round, skip calculation.
+                if len(lgp_components[0])==0:
+                    lgp_longest_d[i,j] = 0
+                else:
+                    # find all days of each cycle
+                    sum_list = []
+                    
+                    for k in lgp_components[0]:
+                        if len(k) ==0:
+                            sum_list.append(0)
+                        else:
+                            sum_list.append(sum(k))
+                    
+                    # change the list into numpy array for possible error occurrence
+                    sum_list = np.array(sum_list)
+                    lgp_bd = lgp_components[1]
+                    idx = np.argwhere(sum_list == np.nanmax(sum_list))[0][0]
+                    lgp_longest_d[i,j] = lgp_bd[idx] +1
+
+        return lgp_longest_d
+
 #----------------- End of file -------------------------#
+
+
