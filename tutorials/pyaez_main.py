@@ -8,10 +8,31 @@ from types import MethodType
 
 # Ensure GDAL exceptions are raised
 gdal.UseExceptions()
-os.environ['PROJ_LIB'] = '/opt/conda/share/proj'
 
+def saveRaster( ref_raster_path, out_path, numpy_raster):
+    """Save NumPy arrays/matrices to GeoTIFF files
+
+    Args:
+        ref_raster_path (string): File path to referece GeoTIFF for geo-tagged info.
+        out_path (string): Path for the created GeoTIFF to be saved as/to
+        numpy_raster (2D NumPy): the arrays to be saveda as GeoTIFF
+    """        
+    # Read random image to get projection data
+    img = gdal.Open(ref_raster_path)
+    # allocating space in hard drive
+    driver = gdal.GetDriverByName("GTiff")
+    outdata = driver.Create(out_path, img.RasterXSize, img.RasterYSize, 1, gdal.GDT_Float32)
+    # set image paramenters (imfrormation related to cordinates)
+    outdata.SetGeoTransform(img.GetGeoTransform())
+    outdata.SetProjection(img.GetProjection())
+    # write numpy matrix as new band and set no data value for the band
+    outdata.GetRasterBand(1).WriteArray(numpy_raster)
+    outdata.GetRasterBand(1).SetNoDataValue(-999)
+    # flush data from memory to hard drive
+    outdata.FlushCache()
+    outdata=None
+    
 def initialize_clim(
-    work_dir: str,
     year: str,
     country_name: str,
     country_mask_name: str,
@@ -23,7 +44,6 @@ def initialize_clim(
     Initialize and configure the ClimateRegime object for AEZ simulation.
 
     Parameters:
-        work_dir (str): Working directory path.
         year (str, optional): Year to filter time series (currently unused).
         country_name (str, optional): Country name (currently unused).
         country_mask_name (str): Filename of the country mask raster.
@@ -34,6 +54,10 @@ def initialize_clim(
     Returns:
         ClimateRegime: Configured ClimateRegime object.
     """
+
+    cwd=os.getcwd()
+    work_dir = os.path.dirname(cwd)
+
     # Validate working directory
     if not os.path.isdir(work_dir):
         raise FileNotFoundError(f"Working directory not found: {work_dir}")
