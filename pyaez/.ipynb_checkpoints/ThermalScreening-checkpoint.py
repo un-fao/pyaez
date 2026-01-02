@@ -160,40 +160,44 @@ def getReductionFactorNumba(set_Tsum_screening:bool, LnS, LsO, LO, HnS, HsO, HO,
 
 # ---------------------------------------- Numba Enhanced Functions End Here---------------------------------- #
 # ------------------Intermediate Functions (Not available for Numba enhancement) Starts Here -------------------#
-def getInterpolatedTempData(temp1D):
+def getInterpolatedTempData(temp1D, interp_method = 'Pchip'):
     """
     Get smoothened temperature data for 365 days.
     
     Parameter
     ---------
     temp1D (1-D NumPy Array): Input mean temperature (Deg C)
+    interp_method (string): interpolation methodology, can be either 'interp1' or 'Pchip' (default)
     
     Returns
     -------
     interp_temp1D (1-D NumPy Array): Smoothened mean temperature.
     """
-    #interp1D = np.zeros(temp1D.shape)
 
-    #tmp = np.array([temp1D[k-1] for k in range(15,temp1D.shape[0]+1,30)])
-    #mid_doy = np.arange(15,temp1D.shape[0]+1,30)
-
-    # Quadratic spline interpolation for 330 days
-    #int_mdl = interp1d(mid_doy, tmp, kind='quadratic', fill_value='extrapolate')
-
-    #interp1D = int_mdl(np.arange(1,temp1D.shape[0]+1))
-
-    n = temp1D.shape[0]
-    mid_doy = np.arange(15, n+1, 30)
-    anchors_x = np.unique(np.r_[1, mid_doy, n])
-    tmp = np.array([temp1D[k-1] for k in anchors_x])  # same as temp1D[anchors_x-1]
+    if interp_method == 'interp1':
+        interp1D = np.zeros(temp1D.shape)
     
-    int_mdl = PchipInterpolator(anchors_x, tmp, extrapolate=True)
-    interp1D = int_mdl(np.arange(1, n+1))
+        tmp = np.array([temp1D[k-1] for k in range(15,temp1D.shape[0]+1,30)])
+        mid_doy = np.arange(15,temp1D.shape[0]+1,30)
     
-    # Enforce bounds: choose either the empirical [min,max] or a known domain
-    lo, hi = float(np.nanmin(tmp)), float(np.nanmax(tmp))
-    # If you know temps must be, say, [0, 1], use: lo, hi = 0.0, 1.0
-    interp1D = np.clip(interp1D, lo, hi)
+        # Quadratic spline interpolation for 330 days
+        int_mdl = interp1d(mid_doy, tmp, kind='quadratic', fill_value='extrapolate')
+    
+        interp1D = int_mdl(np.arange(1,temp1D.shape[0]+1))
+
+    elif interp_method == 'Pchip':
+        n = temp1D.shape[0]
+        mid_doy = np.arange(15, n+1, 30)
+        anchors_x = np.unique(np.r_[1, mid_doy, n])
+        tmp = np.array([temp1D[k-1] for k in anchors_x])  # same as temp1D[anchors_x-1]
+        
+        int_mdl = PchipInterpolator(anchors_x, tmp, extrapolate=True)
+        interp1D = int_mdl(np.arange(1, n+1))
+        
+        # Enforce bounds: choose either the empirical [min,max] or a known domain
+        lo, hi = float(np.nanmin(tmp)), float(np.nanmax(tmp))
+        # If you know temps must be, say, [0, 1], use: lo, hi = 0.0, 1.0
+        interp1D = np.clip(interp1D, lo, hi)
 
     return interp1D
 
@@ -230,26 +234,7 @@ def getTemperatureGrowingPeriod(temp1D, threshold):
     LGPt (int): thermal growing period.
     """
     # Calculation of Temp Profile for 1-D numpy array of climate data input
-    # tmp = np.array([temp1D[k-1] for k in range(15,temp1D.shape[0]+1,30)])
-    # mid_doy = np.arange(15,temp1D.shape[0]+1,30)
-
-    # Quadratic spline interpolation for 330 days
-    # int_mdl = interp1d(mid_doy, tmp, kind='quadratic', fill_value='extrapolate')
-
-    # interp1D = int_mdl(np.arange(1,temp1D.shape[0]+1))
-
-    n = temp1D.shape[0]
-    mid_doy = np.arange(15, n+1, 30)
-    anchors_x = np.unique(np.r_[1, mid_doy, n])
-    tmp = np.array([temp1D[k-1] for k in anchors_x])  # same as temp1D[anchors_x-1]
-    
-    int_mdl = PchipInterpolator(anchors_x, tmp, extrapolate=True)
-    interp1D = int_mdl(np.arange(1, n+1))
-    
-    # Enforce bounds: choose either the empirical [min,max] or a known domain
-    lo, hi = float(np.nanmin(tmp)), float(np.nanmax(tmp))
-    # If you know temps must be, say, [0, 1], use: lo, hi = 0.0, 1.0
-    interp1D = np.clip(interp1D, lo, hi)
+    interp1D = getInterpolatedTempData(temp1D)
 
     lgpt = interp1D>=threshold
 
@@ -268,26 +253,7 @@ def getTemperatureSum(temp1D, threshold):
     TSUM (int): temperature summation.
     """
     # Calculation of Temp Profile for 1-D numpy array of climate data input
-    # tmp = np.array([temp1D[k-1] for k in range(15,temp1D.shape[0]+1,30)])
-    # mid_doy = np.arange(15,temp1D.shape[0]+1,30)
-
-    # Quadratic spline interpolation for 330 days
-    # int_mdl = interp1d(mid_doy, tmp, kind='quadratic', fill_value='extrapolate')
-
-    # interp1D = int_mdl(np.arange(1,temp1D.shape[0]+1))
-
-    n = temp1D.shape[0]
-    mid_doy = np.arange(15, n+1, 30)
-    anchors_x = np.unique(np.r_[1, mid_doy, n])
-    tmp = np.array([temp1D[k-1] for k in anchors_x])  # same as temp1D[anchors_x-1]
-    
-    int_mdl = PchipInterpolator(anchors_x, tmp, extrapolate=True)
-    interp1D = int_mdl(np.arange(1, n+1))
-    
-    # Enforce bounds: choose either the empirical [min,max] or a known domain
-    lo, hi = float(np.nanmin(tmp)), float(np.nanmax(tmp))
-    # If you know temps must be, say, [0, 1], use: lo, hi = 0.0, 1.0
-    interp1D = np.clip(interp1D, lo, hi)
+    interp1D = getInterpolatedTempData(temp1D)
 
     interp1D[interp1D <= threshold] = 0
 
@@ -307,26 +273,7 @@ def getSmoothTemp(temp1D):
     smootheTemp (1-D NumPy Array): Quadratic spline smoothened temperature (Deg C)
     """
     # Calculation of Temp Profile for 1-D numpy array of climate data input
-    # tmp = np.array([temp1D[k-1] for k in range(15,temp1D.shape[0]+1,30)])
-    # mid_doy = np.arange(15,temp1D.shape[0]+1,30)
-
-    # Quadratic spline interpolation for 330 days
-    # int_mdl = interp1d(mid_doy, tmp, kind='quadratic', fill_value='extrapolate')
-
-    # interp1D = int_mdl(np.arange(1,temp1D.shape[0]+1))
-
-    n = temp1D.shape[0]
-    mid_doy = np.arange(15, n+1, 30)
-    anchors_x = np.unique(np.r_[1, mid_doy, n])
-    tmp = np.array([temp1D[k-1] for k in anchors_x])  # same as temp1D[anchors_x-1]
-    
-    int_mdl = PchipInterpolator(anchors_x, tmp, extrapolate=True)
-    interp1D = int_mdl(np.arange(1, n+1))
-    
-    # Enforce bounds: choose either the empirical [min,max] or a known domain
-    lo, hi = float(np.nanmin(tmp)), float(np.nanmax(tmp))
-    # If you know temps must be, say, [0, 1], use: lo, hi = 0.0, 1.0
-    interp1D = np.clip(interp1D, lo, hi)
+    interp1D = getInterpolatedTempData(temp1D)
 
     return interp1D
 
@@ -344,26 +291,7 @@ def getTempTrend(temp1D):
     Temperature Trend (1-D NumPy Array): Upward (+1)/ Downward (-1) trend data.
     """
     # Calculation of Temp Profile for 1-D numpy array of climate data input
-    # tmp = np.array([temp1D[k-1] for k in range(15,temp1D.shape[0]+1,30)])
-    # mid_doy = np.arange(15,temp1D.shape[0]+1,30)
-
-    # Quadratic spline interpolation for 330 days
-    # int_mdl = interp1d(mid_doy, tmp, kind='quadratic', fill_value='extrapolate')
-
-    # interp1D = int_mdl(np.arange(1,temp1D.shape[0]+1))
-
-    n = temp1D.shape[0]
-    mid_doy = np.arange(15, n+1, 30)
-    anchors_x = np.unique(np.r_[1, mid_doy, n])
-    tmp = np.array([temp1D[k-1] for k in anchors_x])  # same as temp1D[anchors_x-1]
-    
-    int_mdl = PchipInterpolator(anchors_x, tmp, extrapolate=True)
-    interp1D = int_mdl(np.arange(1, n+1))
-    
-    # Enforce bounds: choose either the empirical [min,max] or a known domain
-    lo, hi = float(np.nanmin(tmp)), float(np.nanmax(tmp))
-    # If you know temps must be, say, [0, 1], use: lo, hi = 0.0, 1.0
-    interp1D = np.clip(interp1D, lo, hi)
+    interp1D = getInterpolatedTempData(temp1D)
     
     # Detect the warmest and coldest day of year.
     tmaxidx = np.argmax(interp1D)
@@ -389,29 +317,8 @@ def getTemperatureProfile(temp1D):
     None.
     """
     # Calculation of Temp Profile for 1-D numpy array of climate data input
-    # tmp = np.array([temp1D[k-1] for k in range(15,temp1D.shape[0]+1,30)])
-    # mid_doy = np.arange(15,temp1D.shape[0]+1,30)
-
-    # Quadratic spline interpolation for 330 days
-    # int_mdl = interp1d(mid_doy, tmp, kind='quadratic', fill_value='extrapolate')
-
-    # interp1D = int_mdl(np.arange(1,temp1D.shape[0]+1))
-
+    interp1D = getInterpolatedTempData(temp1D)
     
-    n = temp1D.shape[0]
-    mid_doy = np.arange(15, n+1, 30)
-    anchors_x = np.unique(np.r_[1, mid_doy, n])
-    tmp = np.array([temp1D[k-1] for k in anchors_x])  # same as temp1D[anchors_x-1]
-    
-    int_mdl = PchipInterpolator(anchors_x, tmp, extrapolate=True)
-    interp1D = int_mdl(np.arange(1, n+1))
-    
-    # Enforce bounds: choose either the empirical [min,max] or a known domain
-    lo, hi = float(np.nanmin(tmp)), float(np.nanmax(tmp))
-    # If you know temps must be, say, [0, 1], use: lo, hi = 0.0, 1.0
-    interp1D = np.clip(interp1D, lo, hi)
-
-
     # Detect the warmest and coldest day of year.
     tmaxidx = np.argmax(interp1D)
     tminidx= np.argmin(interp1D)
@@ -528,6 +435,8 @@ def calculateTemperatureProfileClasses(
         input_temp,
         input_RH,
         LGPT00,
+        LGPT05,
+        LGPT10,
         i_cycle,
         cycle_len
     ):
@@ -561,9 +470,12 @@ def calculateTemperatureProfileClasses(
     input_RH : array_like
         1‑D sequence of daily relative humidity values (percent, 0–100) for the full year.
         Used to compute `RHavg`, `RHmin`, `RHmax` over the crop cycle window.
-    LGPT00 : Any
-        Placeholder argument present for interface compatibility (not used directly here).
-        Keep it if downstream rules refer to it; otherwise it can be removed.
+    LGPT00 : int
+        LGPt0 value for the specific crop
+    LGPT05 : int
+        LGPt5 value for the specific crop
+    LGPT10 : int
+        LGPt10 value for the specific crop
     i_cycle : int
         Start index (0‑based) of the crop cycle window within the year. The slice
         `[i_cycle : i_cycle + cycle_len]` must lie within the bounds of `input_temp`
@@ -613,7 +525,9 @@ def calculateTemperatureProfileClasses(
     ...     data=cfg,                       # source for insertCropSpecificRuleParameters
     ...     input_temp=temp365,             # length 365
     ...     input_RH=rh365,                 # length 365
-    ...     LGPT00=None,                    # unused here unless in rules
+    ...     LGPT00=None,                    # lgpt0
+    ...     LGPT05=None,                    # lgpt5
+    ...     LGPT10=None,                    # lgpt10
     ...     i_cycle=90,                     # start at day 90
     ...     cycle_len=120                   # 120-day crop    ...     cycle_len=120                   # 120-day crop cycle
     ... )

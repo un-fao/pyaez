@@ -1368,7 +1368,7 @@ def simulateCropCycleOneLocation(start_doy:int, end_doy:int, step_doy:int, leap_
     if LAi <= 0.001 or HI <= 0.001:
         return final_yld, wde, eta, fc1, fc2, ccd
     else:
-        val = CropCycleLooping(start_doy, end_doy, step_doy, climate_data, lgpt0, min_temp_threshold, perennial_flg,
+        val = CropCycleLooping(start_doy, end_doy, step_doy, climate_data, lgpt0, lgpt5, lgpt10, min_temp_threshold, perennial_flg,
                         cycle_len, set_TSUM_screening, LnS, LsO, LO, HnS, HsO, HO, set_CropSpecificRule, data, 
                         lat, LAi, HI, legume, adaptability, plant_height,
                         kc, d_per, Sa, D1, D2, crop_group, yloss_f_all, yloss_f, irr_or_rain, leap_year, crop_name, hibernating_flag)
@@ -1380,7 +1380,7 @@ def simulateCropCycleOneLocation(start_doy:int, end_doy:int, step_doy:int, leap_
 
         
 
-def CropCycleLooping(start_doy:int, end_doy:int, step_doy:int, climate_data, lgpt0, min_T_threshold, perennial_flag:bool,
+def CropCycleLooping(start_doy:int, end_doy:int, step_doy:int, climate_data, lgpt0, lgpt5, lgpt10, min_T_threshold, perennial_flag:bool,
                      cycle_len:int, set_TSUM_screening:bool, LnS, LsO, LO, HnS, HsO, HO, set_CropSpecificRule:bool, data, 
                      lat:float, lai:float, hi:float, legume:int, adaptability:int, plant_height:float,
                      kc, d_per, Sa, D1:float, D2:float, crop_group:int, yloss_f_all:float, yloss_f, irr_or_rain:str, leap_year:bool,
@@ -1450,6 +1450,8 @@ def CropCycleLooping(start_doy:int, end_doy:int, step_doy:int, climate_data, lgp
                                                          mean_T, 
                                                          rel_hum, 
                                                          lgpt0, 
+                                                         lgpt5, 
+                                                         lgpt10,
                                                          i_cycle,
                                                          cycle_len)
         
