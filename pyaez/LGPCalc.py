@@ -10,8 +10,10 @@ Modifications
 1. Revised 10-day moving average to return 365 days of input variable instead of 356.
 """
 
-from numba import jit
+from numba import jit, njit, prange
 import numpy as np
+
+
 
 np.round_ = np.round
 
@@ -111,7 +113,7 @@ def eta(wb_old, etm, Sa, D, p, rain):
     return wb, wx, eta
 
 
-@jit(nopython=True)
+@njit(nopython=True)
 def psh(ng, et0):
     """Calculate soil moisture depletion fraction (0-1)
 
@@ -173,9 +175,10 @@ def val10day(Et):
 
 
 @jit(nopython=True)
-def RefWaterBalanceCalc(Tx365, Ta365, Pcp365, Txsnm, Fsnm, Eto365, wb_old, sb_old, doy, istart0, istart1, Sa, D, p, lgpt5_point, istup):
+def RefWaterBalanceCalc(Tx365, Ta365, Pcp365, Txsnm, Fsnm, Eto365, wb_old, sb_old, doy, istart0, istart1, Sa, D, p,
+                        lgpt5_point, istup):
     """Calculate reference water balance.
-        This is a Numba routine, which means all the arguments are a single element -- not an array. 
+        This is a Numba routine, which means all the arguments are a single element -- not an array.
     Args:
         Tx365 (float): a daily value of maximum temperature
         Ta365 (float): a daily value of average temperature
@@ -214,7 +217,6 @@ def RefWaterBalanceCalc(Tx365, Ta365, Pcp365, Txsnm, Fsnm, Eto365, wb_old, sb_ol
 
     Wx365 = 0
 
-
     # Period with Tmax <= Txsnm (precipitaton falls as snow)
     if Tx365 <= Txsnm:
         kc365 = kc1
@@ -222,18 +224,18 @@ def RefWaterBalanceCalc(Tx365, Ta365, Pcp365, Txsnm, Fsnm, Eto365, wb_old, sb_ol
 
         Etm365 = etm
 
-        sbx = sb_old+Pcp365
+        sbx = sb_old + Pcp365
 
         if sbx >= etm:
             Sb365 = sbx - etm
             Eta365 = etm
         else:
             Sb365 = 0
-            wb, wx, Eta = eta(wb_old, etm-sbx, Sa, D, p, 0.)
+            wb, wx, Eta = eta(wb_old, etm - sbx, Sa, D, p, 0.)
             Eta365 = Eta + sbx
 
         Wb365 = wb
-        sb =Sb365
+        sb = Sb365
 
     # period with Txsnm < Tmax; Ta <=0 (precipitation is water; 100% runoff)
     # Snow-melt takes place; minor evapotranspiration
@@ -243,13 +245,13 @@ def RefWaterBalanceCalc(Tx365, Ta365, Pcp365, Txsnm, Fsnm, Eto365, wb_old, sb_ol
         Etm365 = etm
 
         # Snow-melt function
-        snm = min(Fsnm*(Tx365-Txsnm), sb_old)
+        snm = min(Fsnm * (Tx365 - Txsnm), sb_old)
         sb = sb_old - snm
         wb = wb_old + snm
         sbx = sb
 
         if sbx >= etm:
-            Sb365 = sbx-etm
+            Sb365 = sbx - etm
             Eta365 = etm
 
             if wb > Sa:
@@ -261,8 +263,8 @@ def RefWaterBalanceCalc(Tx365, Ta365, Pcp365, Txsnm, Fsnm, Eto365, wb_old, sb_ol
             Sb365 = 0
             wb, wx, Eta = eta(wb, etm - sbx, Sa, D, p, Pcp365)
             Eta365 = Eta + sbx
-        
-        Wb365 =wb
+
+        Wb365 = wb
         sb = Sb365
         Wx365 = wx
 
@@ -279,7 +281,7 @@ def RefWaterBalanceCalc(Tx365, Ta365, Pcp365, Txsnm, Fsnm, Eto365, wb_old, sb_ol
 
         # In case there is still snow
         if sb_old > 0.:
-            snm = min(Fsnm*(Tx365-Txsnm), sb_old)
+            snm = min(Fsnm * (Tx365 - Txsnm), sb_old)
         else:
             snm = 0.
 
@@ -287,7 +289,7 @@ def RefWaterBalanceCalc(Tx365, Ta365, Pcp365, Txsnm, Fsnm, Eto365, wb_old, sb_ol
         sb = sb_old - snm
         wb, wx, Eta = eta(wb, etm, Sa, D, p, Pcp365)
 
-        Eta365 =Eta
+        Eta365 = Eta
         Sb365 = sb
         Wx365 = wx
         Wb365 = wb
@@ -295,39 +297,39 @@ def RefWaterBalanceCalc(Tx365, Ta365, Pcp365, Txsnm, Fsnm, Eto365, wb_old, sb_ol
     # periods with Ta >5
     elif Ta365 >= 5.:
 
-        if istart0+1 >0 and istart1+1 <= 365:
+        if istart0 + 1 > 0 and istart1 + 1 <= 365:
             # case 2 -- kc increases from 0.5 to 1.0 during first month of LGP
-            if doy+1 >= istart0+1 and doy+1 <= istart1+1:
-                xx = min((doy+1-(istart0+1))/30., 1.)
-                kc = (kc0*(1.-xx))+(kc5*xx)
+            if doy + 1 >= istart0 + 1 and doy + 1 <= istart1 + 1:
+                xx = min((doy + 1 - (istart0 + 1)) / 30., 1.)
+                kc = (kc0 * (1. - xx)) + (kc5 * xx)
             elif istup == 1:
                 kc = kc4
             else:
                 kc = kc6
-        elif istart0+1 >0 and istart1+1 > 365:
-            ii = (istart1 % 365) +1
-            if doy+1 >= istart0+1:
-                xx = min((doy+1-(istart0+1))/30., 1.)   
-                kc = (kc0 * (1.-xx)) + (kc5*xx)
-            elif doy+1 <= ii:
-                xx = min((doy+1+365-(istart0+1))/ 30., 1.0)
-                kc = kc0*(1.-xx)+(kc5*xx)
+        elif istart0 + 1 > 0 and istart1 + 1 > 365:
+            ii = (istart1 % 365) + 1
+            if doy + 1 >= istart0 + 1:
+                xx = min((doy + 1 - (istart0 + 1)) / 30., 1.)
+                kc = (kc0 * (1. - xx)) + (kc5 * xx)
+            elif doy + 1 <= ii:
+                xx = min((doy + 1 + 365 - (istart0 + 1)) / 30., 1.0)
+                kc = kc0 * (1. - xx) + (kc5 * xx)
             elif istup == 1:
                 kc = kc4
             else:
                 kc = kc6
         else:
-            kc = kc5 # kc5
+            kc = kc5  # kc5
 
         kc365 = kc
         etm = kc * Eto365
         Etm365 = etm
         # In case there is still snow
         if sb_old > 0.:
-            snm = min(Fsnm*(Tx365-Txsnm), sb_old)
+            snm = min(Fsnm * (Tx365 - Txsnm), sb_old)
         else:
             snm = 0.
-        
+
         wb = wb_old + snm
         sb = sb_old - snm
 
@@ -338,12 +340,12 @@ def RefWaterBalanceCalc(Tx365, Ta365, Pcp365, Txsnm, Fsnm, Eto365, wb_old, sb_ol
         Wb365 = wb
 
     # added logic for values less than zero
-    if Eta365 <0: Eta365 = 0
-    if Etm365 <0: Etm365 = 0
-    if Wb365 <0: Wb365 = 0
-    if Wx365 <0: Wx365 = 0
-    if Sb365 <0: Sb365 = 0
-    if kc365 <0: kc365 = 0.
+    if Eta365 < 0: Eta365 = 0
+    if Etm365 < 0: Etm365 = 0
+    if Wb365 < 0: Wb365 = 0
+    if Wx365 < 0: Wx365 = 0
+    if Sb365 < 0: Sb365 = 0
+    if kc365 < 0: kc365 = 0.
 
     return Eta365, Etm365, Wb365, Wx365, Sb365, kc365
 
@@ -355,10 +357,10 @@ def setdat(dat1):
     return dat1
 
 
-@jit(nopython=True)
+@njit(parallel=True)
 def islgpt(Ta):
     ist5 = np.zeros((np.shape(Ta)))
-    for i in range(len(Ta)):
+    for i in prange(len(Ta)):
         if Ta[i] >= 5:
             ist5[i] = 1
         else:
@@ -405,3 +407,61 @@ def search_cycles(array):
     final_cycles.append(Onecycle)
     return final_cycles, cycle_idx
 
+@njit(parallel=True)
+def process_chunk(Tx, Ta, P, Eto, istart0, istart1, istup, lgpt5, Txsnm, Fsnm, Sa, D, itflg, T,
+    Eta_out, Etm_out, Wb_out, Wx_out, Sb_out, kc_out):
+
+    n = Tx.shape[0]
+
+    # Parallel loop over pixels
+    for i in prange(n):
+
+        Wb_old = 0.0
+        Sb_old = 0.0
+
+        # -----------------
+        # SPIN-UP
+        # -----------------
+        for _ in range(itflg):
+            for t in range(T):
+
+                p_val = psh(0.0, Eto[i, t])  # must be njit-safe
+
+                Eta, Etm, Wb_new, Wx, Sb_new, kc = RefWaterBalanceCalc(
+                    Tx[i, t], Ta[i, t], P[i, t],
+                    Txsnm, Fsnm, Eto[i, t],
+                    Wb_old, Sb_old,
+                    t, istart0[i], istart1[i],
+                    Sa, D, p_val, lgpt5[i], istup[i, t]
+                )
+
+                if Eta < 0.0:
+                    Eta = 0.0
+
+                Wb_old = Wb_new
+                Sb_old = Sb_new
+
+        # -----------------
+        # FINAL PASS (STORE)
+        # -----------------
+        for t in range(T):
+
+            p_val = psh(0.0, Eto[i, t])
+
+            Eta, Etm, Wb_new, Wx, Sb_new, kc = RefWaterBalanceCalc(
+                Tx[i, t], Ta[i, t], P[i, t],
+                Txsnm, Fsnm, Eto[i, t],
+                Wb_old, Sb_old,
+                t, istart0[i], istart1[i],
+                Sa, D, p_val, lgpt5[i], istup[i, t]
+            )
+
+            Eta_out[i, t] = Eta
+            Etm_out[i, t] = Etm
+            Wb_out[i, t]  = Wb_new
+            Wx_out[i, t]  = Wx
+            Sb_out[i, t]  = Sb_new
+            kc_out[i, t]  = kc
+
+            Wb_old = Wb_new
+            Sb_old = Sb_new
