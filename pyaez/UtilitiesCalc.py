@@ -16,12 +16,75 @@ Modification:
 
 import numpy as np
 from scipy.interpolate import interp1d
-try:
-    import gdal
-except:
-    from osgeo import gdal
-
+# try:
+#     import gdal
+# except:
+#     from osgeo import gdal
+from osgeo import gdal
 np.round_ = np.round
+import psutil
+
+def compute_chunk_size_multi(arrays, extra_arrays=None):
+    """
+    Compute chunk size based on multiple arrays + intermediates.
+
+    Args:
+        arrays (list): list of numpy arrays used as input
+        extra_arrays (list of dict): intermediate arrays with:
+            {
+                "shape_factor": tuple relative to (H, W),
+                "dtype": dtype
+            }
+        memory_fraction (float): fraction of available RAM to use
+    """
+    min_chunk = 128
+    max_chunk = 4096
+
+    # Available Memory
+    available_mem = psutil.virtual_memory().available
+    target_mem = available_mem * 0.1
+
+    # --- Compute bytes per pixel ---
+    bytes_per_pixel = 0
+
+    # Input arrays
+    for arr in arrays:
+        dtype_size = arr.dtype.itemsize
+
+        if arr.ndim == 3:
+            depth = arr.shape[2]
+            bytes_per_pixel += depth * dtype_size
+        else:
+            bytes_per_pixel += dtype_size
+
+    # Intermediate arrays
+    if extra_arrays:
+        for extra in extra_arrays:
+            dtype_size = np.dtype(extra["dtype"]).itemsize
+            factor = np.prod(extra["shape_factor"])
+            bytes_per_pixel += factor * dtype_size
+
+    # Pixels per chunk
+    pixels_per_chunk = target_mem // bytes_per_pixel
+
+    # Convert to square chunk
+    chunk_dim = int(np.sqrt(pixels_per_chunk))
+
+    # Clamp
+    chunk_dim = max(min_chunk, min(chunk_dim, max_chunk))
+    print(chunk_dim)
+
+    return chunk_dim
+
+    pixels_per_chunk = target_mem // bytes_per_pixel
+
+    # Convert to square chunk
+    chunk_dim = int(np.sqrt(pixels_per_chunk))
+
+    # Clamp
+    chunk_dim = max(min_chunk, min(chunk_dim, max_chunk))
+
+    return chunk_dim
 
 def interpMonthlyToDaily( monthly_vector, cycle_begin, cycle_end, no_minus_values=False):
     """Interpolate monthly climate data to daily climate data
@@ -45,7 +108,7 @@ def interpMonthlyToDaily( monthly_vector, cycle_begin, cycle_end, no_minus_value
 
     return daily_vector
 
-def averageDailyToMonthly(daily_vector, leap_year:False):
+def averageDailyToMonthly(daily_array, leap_year=False,axis=-1):
     """Aggregating daily data into monthly data
 
     Args:
@@ -53,37 +116,73 @@ def averageDailyToMonthly(daily_vector, leap_year:False):
         leap_year (Boolean): True for leap year, False for non-leap year
     Returns:
         1D NumPy: Monthly data array
-    """        
-    monthly_vector = np.zeros(12)
-
+    """
     if leap_year:
-        monthly_vector[0] = np.sum(daily_vector[:31])/31
-        monthly_vector[1] = np.sum(daily_vector[31:60])/29
-        monthly_vector[2] = np.sum(daily_vector[60:91])/31
-        monthly_vector[3] = np.sum(daily_vector[91:121])/30
-        monthly_vector[4] = np.sum(daily_vector[121:152])/31
-        monthly_vector[5] = np.sum(daily_vector[152:182])/30
-        monthly_vector[6] = np.sum(daily_vector[182:213])/31
-        monthly_vector[7] = np.sum(daily_vector[213:244])/31
-        monthly_vector[8] = np.sum(daily_vector[244:274])/30
-        monthly_vector[9] = np.sum(daily_vector[274:305])/31
-        monthly_vector[10] = np.sum(daily_vector[305:335])/30
-        monthly_vector[11] = np.sum(daily_vector[335:])/31
+        month_lengths = np.array([31, 29, 31, 30, 31, 30,
+                                  31, 31, 30, 31, 30, 31])
     else:
-        monthly_vector[0] = np.sum(daily_vector[:31])/31
-        monthly_vector[1] = np.sum(daily_vector[31:59])/28
-        monthly_vector[2] = np.sum(daily_vector[59:90])/31
-        monthly_vector[3] = np.sum(daily_vector[90:120])/30
-        monthly_vector[4] = np.sum(daily_vector[120:151])/31
-        monthly_vector[5] = np.sum(daily_vector[151:181])/30
-        monthly_vector[6] = np.sum(daily_vector[181:212])/31
-        monthly_vector[7] = np.sum(daily_vector[212:243])/31
-        monthly_vector[8] = np.sum(daily_vector[243:273])/30
-        monthly_vector[9] = np.sum(daily_vector[273:304])/31
-        monthly_vector[10] = np.sum(daily_vector[304:334])/30
-        monthly_vector[11] = np.sum(daily_vector[334:])/31
+        month_lengths = np.array([31, 28, 31, 30, 31, 30,
+                                  31, 31, 30, 31, 30, 31])
 
-    return monthly_vector
+    split_idx = np.cumsum(month_lengths)[:-1]
+
+    daily_array = np.moveaxis(daily_array, axis, -1)
+
+    monthly_sums = np.add.reduceat(daily_array,
+                                   np.r_[0, split_idx],
+                                   axis=-1)
+
+    monthly_means = monthly_sums / month_lengths
+
+    return monthly_means
+
+
+
+    # for i in range(n):
+    #     stacked[i] = daily_list[i]
+    #
+    # # --- allocate output
+    # monthly = np.empty(stacked.shape[:-1] + (12,), dtype=stacked.dtype)
+    #
+    # # --- vectorized monthly aggregation
+    # for m in range(12):
+    #     start, end = boundaries[m], boundaries[m + 1]
+    #     monthly[..., m] = stacked[..., start:end].mean(axis=-1)
+    #
+    # # --- return as separate arrays
+    # return tuple(monthly[i] for i in range(monthly.shape[0]))
+
+
+    # monthly_vector = np.zeros(12)
+    #
+    # if leap_year:
+    #     monthly_vector[0] = np.sum(daily_vector[:31])/31
+    #     monthly_vector[1] = np.sum(daily_vector[31:60])/29
+    #     monthly_vector[2] = np.sum(daily_vector[60:91])/31
+    #     monthly_vector[3] = np.sum(daily_vector[91:121])/30
+    #     monthly_vector[4] = np.sum(daily_vector[121:152])/31
+    #     monthly_vector[5] = np.sum(daily_vector[152:182])/30
+    #     monthly_vector[6] = np.sum(daily_vector[182:213])/31
+    #     monthly_vector[7] = np.sum(daily_vector[213:244])/31
+    #     monthly_vector[8] = np.sum(daily_vector[244:274])/30
+    #     monthly_vector[9] = np.sum(daily_vector[274:305])/31
+    #     monthly_vector[10] = np.sum(daily_vector[305:335])/30
+    #     monthly_vector[11] = np.sum(daily_vector[335:])/31
+    # else:
+    #     monthly_vector[0] = np.sum(daily_vector[:31])/31
+    #     monthly_vector[1] = np.sum(daily_vector[31:59])/28
+    #     monthly_vector[2] = np.sum(daily_vector[59:90])/31
+    #     monthly_vector[3] = np.sum(daily_vector[90:120])/30
+    #     monthly_vector[4] = np.sum(daily_vector[120:151])/31
+    #     monthly_vector[5] = np.sum(daily_vector[151:181])/30
+    #     monthly_vector[6] = np.sum(daily_vector[181:212])/31
+    #     monthly_vector[7] = np.sum(daily_vector[212:243])/31
+    #     monthly_vector[8] = np.sum(daily_vector[243:273])/30
+    #     monthly_vector[9] = np.sum(daily_vector[273:304])/31
+    #     monthly_vector[10] = np.sum(daily_vector[304:334])/30
+    #     monthly_vector[11] = np.sum(daily_vector[334:])/31
+    #
+    # return monthly_vector
 
 def generateLatitudeMap(lat_min, lat_max, im_height, im_width):
     """Create latitude map from input geographical extents
