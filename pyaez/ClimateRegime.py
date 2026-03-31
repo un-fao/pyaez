@@ -1271,235 +1271,178 @@ class ClimateRegime(object):
         # Class 5: Boreal Climate
         # Class 6: Arctic Climate
 
-        lut = np.zeros(13, dtype=np.int8)
+        nodata_val = self.nodata_val
+        H, W = self.im_height, self.im_width
 
+        # Reclassing tclimate
+        lut = np.zeros(13, dtype=np.int8)
         lut[1] = 1
         lut[2] = 2
         lut[3] = 3
         lut[4] = 3
         lut[5] = 3
-        lut[6:9] = 4  # 6,7,8 → 4
-        lut[9:12] = 5  # 9,10,11 → 5
+        lut[6:9] = 4 # 6,7,8 → 4
+        lut[9:12] = 5 # 9,10,11 → 5
         lut[12] = 6
-        H, W = self.im_height, self.im_width
 
-        aez_tclimate = np.zeros((self.im_height, self.im_width), dtype=np.int8)
-        aez_temp_regime = np.zeros((self.im_height, self.im_width), dtype=np.int8)
-        aez_moisture_regime = np.zeros((self.im_height, self.im_width), dtype=np.int8)
-        aez = np.zeros((self.im_height, self.im_width), dtype=np.int8)
-
+        aez_tclimate = np.zeros((H, W), dtype=np.int8)
+        aez_temp_regime = np.zeros((H, W), dtype=np.int8)
+        aez_moisture_regime = np.zeros((H, W), dtype=np.int8)
+        aez = np.zeros((H, W), dtype=np.int8)
 
         chunk_size = compute_chunk_size_multi(
-            arrays=[aez_tclimate, aez_temp_regime, aez_moisture_regime,aez],
-            extra_arrays=None)
+            arrays=[aez_tclimate, aez_temp_regime, aez_moisture_regime, aez],
+            extra_arrays=None
+        )
 
+        # ---- Step 1a: Thermal climate ----
+        for r0 in range(0, H, chunk_size):
+            r1 = min(r0 + chunk_size, H)
+            for c0 in range(0, W, chunk_size):
+                c1 = min(c0 + chunk_size, W)
 
-        for r0 in range(0, self.im_height, chunk_size):
-            r1 = min(r0 + chunk_size, self.im_height)
-
-            for c0 in range(0, self.im_width, chunk_size):
-                c1 = min(c0 + chunk_size, self.im_width)
-
-                # Extract the chunk
                 t_chunk = tclimate[r0:r1, c0:c1]
                 t_chunk_int = np.where(np.isnan(t_chunk), 0, t_chunk)
                 t_chunk_int = np.clip(t_chunk_int.astype(np.int8), 0, len(lut) - 1)
 
-
-                # Apply LUT
                 out_chunk = lut[t_chunk_int]
 
-                # Apply mask if needed
-                if self.set_mask:
-                    mask_chunk = self.im_mask[r0:r1, c0:c1] != self.nodata_val
-                    out_chunk = np.where(mask_chunk, out_chunk, self.nodata_val)
-
-                # Save back
-                aez_tclimate[r0:r1, c0:c1] = out_chunk
-
-
-
-        nodata_val = self.nodata_val
-
-        for r0 in range(0, self.im_height, chunk_size):
-            r1 = min(r0 + chunk_size, self.im_height)
-
-            for c0 in range(0, self.im_width, chunk_size):
-                c1 = min(c0 + chunk_size, self.im_width)
-
-                # Extract chunk of daily temperatures
-                meanT_chunk = self.meanT_daily[r0:r1, c0:c1, :]  # shape (rows, cols, days)
-
-                # Apply mask if needed
                 if self.set_mask:
                     mask_chunk = self.im_mask[r0:r1, c0:c1] != nodata_val
-                else:
-                    mask_chunk = np.ones((r1 - r0, c1 - c0), dtype=bool)
+                    out_chunk = np.where(mask_chunk, out_chunk, nodata_val)
 
-                # Precompute monthly mean temperatures for the chunk
-                # This will need to be vectorized inside averageDailyToMonthly
+                aez_tclimate[r0:r1, c0:c1] = out_chunk
+
+        # Temperature Regime
+        for r0 in range(0, H, chunk_size):
+            r1 = min(r0 + chunk_size, H)
+            for c0 in range(0, W, chunk_size):
+                c1 = min(c0 + chunk_size, W)
+
+                meanT_chunk = self.meanT_daily[r0:r1, c0:c1, :]  # daily temps
+
+                mask_chunk = self.im_mask[r0:r1, c0:c1] != nodata_val if self.set_mask else np.ones((r1 - r0, c1 - c0),
+                                                                                                    bool)
+
+                # Compute monthly averages
                 meanT_monthly_chunk = np.zeros((r1 - r0, c1 - c0, 12))
                 for i in range(r1 - r0):
                     for j in range(c1 - c0):
                         if mask_chunk[i, j]:
-                            meanT_monthly_chunk[i, j, :] = averageDailyToMonthly(
-                                meanT_chunk[i, j, :], self.leap_year
-                            )
+                            meanT_monthly_chunk[i, j, :] = averageDailyToMonthly(meanT_chunk[i, j, :], self.leap_year)
 
-                # Temperature accumulation over 10°C
-                temp_acc_chunk = meanT_chunk.copy()
-                temp_acc_chunk[temp_acc_chunk < 10] = 0
+                temp_acc_chunk = np.where(meanT_chunk >= 10, meanT_chunk, 0)
 
-                # Compute condition arrays
-                mean_monthly_ge_10 = np.sum(meanT_monthly_chunk >= 10, axis=2)  # number of months >=10°C
-                mean_monthly_ge_5 = np.sum(meanT_monthly_chunk >= 5, axis=2)  # months >=5°C
+                mean_monthly_ge_10 = np.sum(meanT_monthly_chunk >= 10, axis=2)
+                mean_monthly_ge_5 = np.sum(meanT_monthly_chunk >= 5, axis=2)
                 mean_temp_chunk = np.mean(meanT_chunk, axis=2)
                 sum_temp_gt_20 = np.sum(meanT_chunk > 20, axis=2)
                 sum_temp_acc = np.sum(temp_acc_chunk, axis=2)
 
-                # Vectorized assignment
-                # TZ1: Warm
-                tz1 = (mean_monthly_ge_10 == 12) & (mean_temp_chunk >= 20) & mask_chunk
-                aez_temp_regime[r0:r1, c0:c1][tz1] = 1
-
-                # TZ2: Moderately cool
-                tz2 = (mean_monthly_ge_5 == 12) & (mean_monthly_ge_10 >= 8) & mask_chunk
-                aez_temp_regime[r0:r1, c0:c1][tz2] = 2
-
-                # TZ3: Moderate
                 aez_tclimate_chunk = aez_tclimate[r0:r1, c0:c1]
-                tz3 = (aez_tclimate_chunk == 4) & (mean_monthly_ge_10 >= 5) & (sum_temp_gt_20 >= 75) & (
-                            sum_temp_acc > 3000) & mask_chunk
-                aez_temp_regime[r0:r1, c0:c1][tz3] = 3
+                temp_conditions = [
+                    (mean_monthly_ge_10 == 12) & (mean_temp_chunk >= 20) & mask_chunk,  # TZ1
+                    (mean_monthly_ge_5 == 12) & (mean_monthly_ge_10 >= 8) & mask_chunk,  # TZ2
+                    (aez_tclimate_chunk == 4) & (mean_monthly_ge_10 >= 5) & (sum_temp_gt_20 >= 75) & (
+                                sum_temp_acc > 3000) & mask_chunk,  # TZ3
+                    (mean_monthly_ge_10 >= 4) & (mean_temp_chunk >= 0) & mask_chunk,  # TZ4
+                    np.isin(mean_monthly_ge_10, [1, 2, 3]) & (mean_temp_chunk >= 0) & mask_chunk,  # TZ5
+                    ((mean_monthly_ge_10 == 0) | (mean_temp_chunk < 0)) & mask_chunk  # TZ6
+                ]
+                temp_values = [1, 2, 3, 4, 5, 6]
+                aez_temp_regime[r0:r1, c0:c1] = np.select(temp_conditions, temp_values, default=0)
 
-                # TZ4: Cool
-                tz4 = (mean_monthly_ge_10 >= 4) & (mean_temp_chunk >= 0) & mask_chunk
-                aez_temp_regime[r0:r1, c0:c1][tz4] = 4
+        # Moisture Regime
+        for r0 in range(0, H, chunk_size):
+            r1 = min(r0 + chunk_size, H)
+            for c0 in range(0, W, chunk_size):
+                c1 = min(c0 + chunk_size, W)
 
-                # TZ5: Cold
-                tz5 = np.isin(mean_monthly_ge_10, [1, 2, 3]) & (mean_temp_chunk >= 0) & mask_chunk
-                aez_temp_regime[r0:r1, c0:c1][tz5] = 5
-
-                # TZ6: Very cold
-                tz6 = ((mean_monthly_ge_10 == 0) | (mean_temp_chunk < 0)) & mask_chunk
-                aez_temp_regime[r0:r1, c0:c1][tz6] = 6
-
-
-
-
-        nodata_val = self.nodata_val
-
-        for r0 in range(0, self.im_height, chunk_size):
-            r1 = min(r0 + chunk_size, self.im_height)
-
-            for c0 in range(0, self.im_width, chunk_size):
-                c1 = min(c0 + chunk_size, self.im_width)
-
-                # Extract chunk
                 lgpt5_chunk = lgpt_5[r0:r1, c0:c1]
                 lgp_chunk = lgp[r0:r1, c0:c1]
                 lgp_equv_chunk = lgp_equv[r0:r1, c0:c1]
 
-                # Apply mask
-                if self.set_mask:
-                    mask_chunk = self.im_mask[r0:r1, c0:c1] != nodata_val
-                else:
-                    mask_chunk = np.ones_like(lgpt5_chunk, dtype=bool)
-
-                # Initialize output chunk
+                mask_chunk = self.im_mask[r0:r1, c0:c1] != nodata_val if self.set_mask else np.ones_like(lgpt5_chunk,
+                                                                                                         bool)
                 out_chunk = np.zeros_like(lgpt5_chunk, dtype=np.int8)
 
-                # Case 1: lgpt_5 > 330 → use lgp
                 use_lgp = (lgpt5_chunk > 330) & mask_chunk
-
-                out_chunk[use_lgp & (lgp_chunk >= 270)] = 4
-                out_chunk[use_lgp & (lgp_chunk >= 180) & (lgp_chunk < 270)] = 3
-                out_chunk[use_lgp & (lgp_chunk >= 60) & (lgp_chunk < 180)] = 2
-                out_chunk[use_lgp & (lgp_chunk >= 0) & (lgp_chunk < 60)] = 1
-
-                # Case 2: lgpt_5 <= 330 → use lgp_equv
                 use_lgp_equv = (lgpt5_chunk <= 330) & mask_chunk
 
-                out_chunk[use_lgp_equv & (lgp_equv_chunk >= 270)] = 4
-                out_chunk[use_lgp_equv & (lgp_equv_chunk >= 180) & (lgp_equv_chunk < 270)] = 3
-                out_chunk[use_lgp_equv & (lgp_equv_chunk >= 60) & (lgp_equv_chunk < 180)] = 2
-                out_chunk[use_lgp_equv & (lgp_equv_chunk >= 0) & (lgp_equv_chunk < 60)] = 1
+                out_chunk = np.where(use_lgp & (lgp_chunk >= 270), 4, out_chunk)
+                out_chunk = np.where(use_lgp & (lgp_chunk >= 180) & (lgp_chunk < 270), 3, out_chunk)
+                out_chunk = np.where(use_lgp & (lgp_chunk >= 60) & (lgp_chunk < 180), 2, out_chunk)
+                out_chunk = np.where(use_lgp & (lgp_chunk >= 0) & (lgp_chunk < 60), 1, out_chunk)
 
-                # Assign chunk back to output
+                out_chunk = np.where(use_lgp_equv & (lgp_equv_chunk >= 270), 4, out_chunk)
+                out_chunk = np.where(use_lgp_equv & (lgp_equv_chunk >= 180) & (lgp_equv_chunk < 270), 3, out_chunk)
+                out_chunk = np.where(use_lgp_equv & (lgp_equv_chunk >= 60) & (lgp_equv_chunk < 180), 2, out_chunk)
+                out_chunk = np.where(use_lgp_equv & (lgp_equv_chunk >= 0) & (lgp_equv_chunk < 60), 1, out_chunk)
+
                 aez_moisture_regime[r0:r1, c0:c1] = out_chunk
 
+        # Final AEZ assessment
+        for r0 in range(0, H, chunk_size):
+            r1 = min(r0 + chunk_size, H)
+            for c0 in range(0, W, chunk_size):
+                c1 = min(c0 + chunk_size, W)
 
-
-        nodata_val = self.nodata_val
-
-        for r0 in range(0, self.im_height, chunk_size):
-            r1 = min(r0 + chunk_size, self.im_height)
-
-            for c0 in range(0, self.im_width, chunk_size):
-                c1 = min(c0 + chunk_size, self.im_width)
-
-                # Extract chunks
                 soil = soil_terrain_lulc[r0:r1, c0:c1]
                 temp = aez_temp_regime[r0:r1, c0:c1]
                 moist = aez_moisture_regime[r0:r1, c0:c1]
 
-                # Mask
-                if self.set_mask:
-                    mask = self.im_mask[r0:r1, c0:c1] != nodata_val
-                else:
-                    mask = np.ones_like(soil, dtype=bool)
+                mask = self.im_mask[r0:r1, c0:c1] != nodata_val if self.set_mask else np.ones_like(soil, bool)
 
-                # Initialize
-                out = np.zeros_like(soil, dtype=np.int8)
+                # Soil based classes
+                soil_conditions = [
+                    (soil == 8) & mask,
+                    (soil == 7) & mask,
+                    (soil == 1) & mask,
+                    (soil == 6) & mask,
+                    (soil == 2) & mask,
+                    (soil == 5) & mask
+                ]
+                soil_values = [56, 57, 49, 51, 52, 50]
+                out_soil = np.select(soil_conditions, soil_values, default=0)
 
+                # ---- Desert ----
+                desert_mask = (moist == 1) & mask & (out_soil == 0)
+                out_desert = np.where(desert_mask, 53, 0)
 
+                # ---- Permafrost ----
+                valid_moist = np.isin(moist, [1, 2, 3, 4]) & mask
+                out_permafrost = np.select(
+                    [
+                        (temp == 9) & valid_moist & (out_soil == 0) & (out_desert == 0),
+                        (temp == 10) & valid_moist & (out_soil == 0) & (out_desert == 0)
+                    ],
+                    [54, 55],
+                    default=0
+                )
 
-                #classifying as according to original code
-
-                out[(soil == 8) & mask] = 56
-                out[(soil == 7) & mask] = 57
-                out[(soil == 1) & mask] = 49
-                out[(soil == 6) & mask] = 51
-                out[(soil == 2) & mask] = 52
-                out[(soil == 5) & mask] = 50
-
-                # Desert
-                out[(moist == 1) & mask & (out == 0)] = 53
-
-                # Permafrost
-                valid_moist = np.isin(moist, [1, 2, 3, 4])
-
-                out[(temp == 9) & valid_moist & mask & (out == 0)] = 54
-                out[(temp == 10) & valid_moist & mask & (out == 0)] = 55
-
-
-                # Valid combinations only
+                # Formula-based AEZ for remaining cells
+                combined_previous = out_soil + out_desert + out_permafrost
                 valid_combo = (
                         (temp >= 1) & (temp <= 8) &
                         (moist >= 2) & (moist <= 4) &
                         (soil >= 3) & (soil <= 4) &
-                        mask &
-                        (out == 0)  # only where not already assigned
+                        mask & (combined_previous == 0)
                 )
-
-                # Compute indices
                 t = temp - 1
                 m = moist - 2
                 s = soil - 3
+                out_formula = np.zeros_like(out_soil, dtype=np.int8)
+                out_formula[valid_combo] = (t[valid_combo] * 6 + m[valid_combo] * 2 + s[valid_combo] + 1)
 
-                # Formula
-                out[valid_combo] = (t[valid_combo] * 6 +
-                                    m[valid_combo] * 2 +
-                                    s[valid_combo] + 1)
+                # Combining and writing back
+                out_chunk = np.where(combined_previous > 0, combined_previous, out_formula)
+                aez[r0:r1, c0:c1] = out_chunk
 
-                # Save back
-                aez[r0:r1, c0:c1] = out
 
         if self.set_mask:
             return np.where(self.im_mask != nodata_val, aez, np.nan)
         else:
             return aez
-
 
     """ 
     Note from Swun: In this code, the logic of temperature amplitude is not added 
@@ -1609,59 +1552,120 @@ class ClimateRegime(object):
                 # Initialize chunk output
                 out_chunk = np.ones_like(t_climate_chunk, dtype=np.int8)  # default = 1
 
-                # t_climate == 1 condition
+                # Masks
                 mask_tc1 = (t_climate_chunk == 1) & mask_chunk
 
-                # Multi-condition masks
-                cond8 = mask_tc1 & (lgp_chunk >= 360) & (lgp_t5_chunk >= 360) & (lgp_t10_chunk >= 360) & \
+                cond8 = mask_tc1 & (
+                        (lgp_chunk >= 360) & (lgp_t5_chunk >= 360) & (lgp_t10_chunk >= 360) &
                         (ts_t0_chunk >= 7200) & (ts_t10_chunk >= 7000)
-                cond6 = mask_tc1 & (lgp_chunk >= 300) & (lgp_t5_chunk >= 300) & (lgp_t10_chunk >= 240) & \
+                )
+
+                cond6 = mask_tc1 & (
+                        (lgp_chunk >= 300) & (lgp_t5_chunk >= 300) & (lgp_t10_chunk >= 240) &
                         (ts_t0_chunk >= 7200) & (ts_g_t5_chunk >= 5100) & (ts_g_t10_chunk >= 4800)
-                cond4 = mask_tc1 & (lgp_chunk >= 270) & (lgp_t5_chunk >= 270) & (lgp_t10_chunk >= 165) & \
+                )
+
+                # Class 4 variants
+                cond4a = mask_tc1 & (
+                        (lgp_chunk >= 270) & (lgp_t5_chunk >= 270) & (lgp_t10_chunk >= 165) &
                         (ts_t0_chunk >= 5500) & (ts_g_t5_chunk >= 4000) & (ts_g_t10_chunk >= 3200)
-                cond3 = mask_tc1 & (lgp_chunk >= 220) & (lgp_t5_chunk >= 220) & (lgp_t10_chunk >= 120) & \
+                )
+
+                cond4b = mask_tc1 & (
+                        (lgp_chunk >= 240) & (lgp_t5_chunk >= 240) & (lgp_t10_chunk >= 165) &
+                        (ts_t0_chunk >= 6400) & (ts_g_t5_chunk >= 4000) & (ts_g_t10_chunk >= 3200)
+                )
+
+                cond4c = mask_tc1 & (
+                        (lgp_chunk >= 210) & (lgp_t5_chunk >= 240) & (lgp_t10_chunk >= 165) &
+                        (ts_t0_chunk >= 7200) & (ts_g_t5_chunk >= 4000) & (ts_g_t10_chunk >= 3200)
+                )
+
+                cond4 = cond4a | cond4b | cond4c
+
+                # Class 3 variants
+                cond3a = mask_tc1 & (
+                        (lgp_chunk >= 220) & (lgp_t5_chunk >= 220) & (lgp_t10_chunk >= 120) &
                         (ts_t0_chunk >= 5500) & (ts_g_t5_chunk >= 3200) & (ts_g_t10_chunk >= 2700)
-                cond2 = mask_tc1 & (lgp_chunk >= 45) & (lgp_t5_chunk >= 120) & (lgp_t10_chunk >= 90) & \
+                )
+
+                cond3b = mask_tc1 & (
+                        (lgp_chunk >= 200) & (lgp_t5_chunk >= 200) & (lgp_t10_chunk >= 120) &
+                        (ts_t0_chunk >= 6400) & (ts_g_t5_chunk >= 3200) & (ts_g_t10_chunk >= 2700)
+                )
+
+                cond3c = mask_tc1 & (
+                        (lgp_chunk >= 180) & (lgp_t5_chunk >= 200) & (lgp_t10_chunk >= 120) &
+                        (ts_t0_chunk >= 7200) & (ts_g_t5_chunk >= 3200) & (ts_g_t10_chunk >= 2700)
+                )
+
+                cond3 = cond3a | cond3b | cond3c
+
+                # class 2
+                cond2 = mask_tc1 & (
+                        (lgp_chunk >= 45) & (lgp_t5_chunk >= 120) & (lgp_t10_chunk >= 90) &
                         (ts_t0_chunk >= 1600) & (ts_t10_chunk >= 1200)
+                )
 
-                # Assign values
-                out_chunk[cond8] = 8
-                out_chunk[cond6] = 6
-                out_chunk[cond4] = 4
-                out_chunk[cond3] = 3
-                out_chunk[cond2] = 2
+                # Priority Applying
+                out_tc1 = np.select(
+                    [cond8, cond6, cond4, cond3, cond2],
+                    [8, 6, 4, 3, 2],
+                    default=1
+                )
 
-                # t_climate != 1 condition
                 mask_tc2 = (t_climate_chunk != 1) & mask_chunk
 
-                cond8_2 = mask_tc2 & (lgp_chunk >= 360) & (lgp_t5_chunk >= 360) & (lgp_t10_chunk >= 330) & \
-                          (ts_t0_chunk >= 7200) & (ts_t10_chunk >= 7000)
-                cond7_2 = mask_tc2 & (lgp_chunk >= 330) & (lgp_t5_chunk >= 330) & (lgp_t10_chunk >= 270) & \
-                          (ts_t0_chunk >= 5700) & (ts_t10_chunk >= 5500)
-                cond6_2 = mask_tc2 & (lgp_chunk >= 300) & (lgp_t5_chunk >= 300) & (lgp_t10_chunk >= 240) & \
-                          (ts_t0_chunk >= 5400) & (ts_t10_chunk >= 5100) & (ts_g_t5_chunk >= 5100) & (
-                                      ts_g_t10_chunk >= 4800)
-                cond5_2 = mask_tc2 & (lgp_chunk >= 240) & (lgp_t5_chunk >= 270) & (lgp_t10_chunk >= 180) & \
-                          (ts_t0_chunk >= 4800) & (ts_t10_chunk >= 4500) & (ts_g_t5_chunk >= 4300) & (
-                                      ts_g_t10_chunk >= 4000)
-                cond4_2 = mask_tc2 & (lgp_chunk >= 210) & (lgp_t5_chunk >= 240) & (lgp_t10_chunk >= 165) & \
-                          (ts_t0_chunk >= 4500) & (ts_t10_chunk >= 3600) & (ts_g_t5_chunk >= 4000) & (
-                                      ts_g_t10_chunk >= 3200)
-                cond3_2 = mask_tc2 & (lgp_chunk >= 180) & (lgp_t5_chunk >= 200) & (lgp_t10_chunk >= 120) & \
-                          (ts_t0_chunk >= 3600) & (ts_t10_chunk >= 3000) & (ts_g_t5_chunk >= 3200) & (
-                                      ts_g_t10_chunk >= 2700)
-                cond2_2 = mask_tc2 & (lgp_chunk >= 45) & (lgp_t5_chunk >= 120) & (lgp_t10_chunk >= 90) & \
-                          (ts_t0_chunk >= 1600) & (ts_t10_chunk >= 1200)
+                cond8_2 = mask_tc2 & (
+                        (lgp_chunk >= 360) & (lgp_t5_chunk >= 360) & (lgp_t10_chunk >= 330) &
+                        (ts_t0_chunk >= 7200) & (ts_t10_chunk >= 7000)
+                )
 
-                out_chunk[cond8_2] = 8
-                out_chunk[cond7_2] = 7
-                out_chunk[cond6_2] = 6
-                out_chunk[cond5_2] = 5
-                out_chunk[cond4_2] = 4
-                out_chunk[cond3_2] = 3
-                out_chunk[cond2_2] = 2
+                cond7_2 = mask_tc2 & (
+                        (lgp_chunk >= 330) & (lgp_t5_chunk >= 330) & (lgp_t10_chunk >= 270) &
+                        (ts_t0_chunk >= 5700) & (ts_t10_chunk >= 5500)
+                )
 
-                # Assign the processed chunk back to full raster
+                cond6_2 = mask_tc2 & (
+                        (lgp_chunk >= 300) & (lgp_t5_chunk >= 300) & (lgp_t10_chunk >= 240) &
+                        (ts_t0_chunk >= 5400) & (ts_t10_chunk >= 5100) &
+                        (ts_g_t5_chunk >= 5100) & (ts_g_t10_chunk >= 4800)
+                )
+
+                cond5_2 = mask_tc2 & (
+                        (lgp_chunk >= 240) & (lgp_t5_chunk >= 270) & (lgp_t10_chunk >= 180) &
+                        (ts_t0_chunk >= 4800) & (ts_t10_chunk >= 4500) &
+                        (ts_g_t5_chunk >= 4300) & (ts_g_t10_chunk >= 4000)
+                )
+
+                cond4_2 = mask_tc2 & (
+                        (lgp_chunk >= 210) & (lgp_t5_chunk >= 240) & (lgp_t10_chunk >= 165) &
+                        (ts_t0_chunk >= 4500) & (ts_t10_chunk >= 3600) &
+                        (ts_g_t5_chunk >= 4000) & (ts_g_t10_chunk >= 3200)
+                )
+
+                cond3_2 = mask_tc2 & (
+                        (lgp_chunk >= 180) & (lgp_t5_chunk >= 200) & (lgp_t10_chunk >= 120) &
+                        (ts_t0_chunk >= 3600) & (ts_t10_chunk >= 3000) &
+                        (ts_g_t5_chunk >= 3200) & (ts_g_t10_chunk >= 2700)
+                )
+
+                cond2_2 = mask_tc2 & (
+                        (lgp_chunk >= 45) & (lgp_t5_chunk >= 120) & (lgp_t10_chunk >= 90) &
+                        (ts_t0_chunk >= 1600) & (ts_t10_chunk >= 1200)
+                )
+
+                out_tc2 = np.select(
+                    [cond8_2, cond7_2, cond6_2, cond5_2, cond4_2, cond3_2, cond2_2],
+                    [8, 7, 6, 5, 4, 3, 2],
+                    default=1
+                )
+
+
+
+                out_chunk[mask_tc1] = out_tc1[mask_tc1]
+                out_chunk[mask_tc2] = out_tc2[mask_tc2]
+
                 multi_crop_rain[r0:r1, c0:c1] = out_chunk
 
 
@@ -1692,58 +1696,68 @@ class ClimateRegime(object):
                 # Default chunk output = 1
                 out_chunk = np.ones_like(t_climate_chunk, dtype=np.int8)
 
-                # Case: t_climate == 1
+                # Case 1: t_climate == 1
                 mask_tc1 = (t_climate_chunk == 1) & mask_chunk
 
-                cond8 = mask_tc1 & (lgp_t5_chunk >= 360) & (lgp_t10_chunk >= 360) & \
-                        (ts_t0_chunk >= 7200) & (ts_t10_chunk >= 7000)
-                cond6 = mask_tc1 & (lgp_t5_chunk >= 300) & (lgp_t10_chunk >= 240) & \
-                        (ts_t0_chunk >= 7200) & (ts_g_t5_chunk >= 5100) & (ts_g_t10_chunk >= 4800)
-                cond4 = mask_tc1 & (lgp_t5_chunk >= 270) & (lgp_t10_chunk >= 165) & \
-                        (ts_t0_chunk >= 5500) & (ts_g_t5_chunk >= 4000) & (ts_g_t10_chunk >= 3200)
-                cond3 = mask_tc1 & (lgp_t5_chunk >= 220) & (lgp_t10_chunk >= 120) & \
-                        (ts_t0_chunk >= 5500) & (ts_g_t5_chunk >= 3200) & (ts_g_t10_chunk >= 2700)
-                cond2 = mask_tc1 & (lgp_t5_chunk >= 120) & (lgp_t10_chunk >= 90) & \
-                        (ts_t0_chunk >= 1600) & (ts_t10_chunk >= 1200)
+                out_tc1 = np.select(
+                    [
+                        mask_tc1 & (lgp_t5_chunk >= 360) & (lgp_t10_chunk >= 360) &
+                        (ts_t0_chunk >= 7200) & (ts_t10_chunk >= 7000),
 
-                out_chunk[cond8] = 8
-                out_chunk[cond6] = 6
-                out_chunk[cond4] = 4
-                out_chunk[cond3] = 3
-                out_chunk[cond2] = 2
+                        mask_tc1 & (lgp_t5_chunk >= 300) & (lgp_t10_chunk >= 240) &
+                        (ts_t0_chunk >= 7200) & (ts_g_t5_chunk >= 5100) & (ts_g_t10_chunk >= 4800),
 
-                # Case: t_climate != 1
+                        mask_tc1 & (lgp_t5_chunk >= 270) & (lgp_t10_chunk >= 165) &
+                        (ts_t0_chunk >= 5500) & (ts_g_t5_chunk >= 4000) & (ts_g_t10_chunk >= 3200),
+
+                        mask_tc1 & (lgp_t5_chunk >= 220) & (lgp_t10_chunk >= 120) &
+                        (ts_t0_chunk >= 5500) & (ts_g_t5_chunk >= 3200) & (ts_g_t10_chunk >= 2700),
+
+                        mask_tc1 & (lgp_t5_chunk >= 120) & (lgp_t10_chunk >= 90) &
+                        (ts_t0_chunk >= 1600) & (ts_t10_chunk >= 1200),
+                    ],
+                    [8, 6, 4, 3, 2],
+                    default=1
+                ).astype(np.int8)
+
+                #Case 2: t_climate != 1
                 mask_tc2 = (t_climate_chunk != 1) & mask_chunk
 
-                cond8_2 = mask_tc2 & (lgp_t5_chunk >= 360) & (lgp_t10_chunk >= 330) & \
-                          (ts_t0_chunk >= 7200) & (ts_t10_chunk >= 7000)
-                cond7_2 = mask_tc2 & (lgp_t5_chunk >= 330) & (lgp_t10_chunk >= 270) & \
-                          (ts_t0_chunk >= 5700) & (ts_t10_chunk >= 5500)
-                cond6_2 = mask_tc2 & (lgp_t5_chunk >= 300) & (lgp_t10_chunk >= 240) & \
-                          (ts_t0_chunk >= 5400) & (ts_t10_chunk >= 5100) & (ts_g_t5_chunk >= 5100) & (
-                                      ts_g_t10_chunk >= 4800)
-                cond5_2 = mask_tc2 & (lgp_t5_chunk >= 270) & (lgp_t10_chunk >= 180) & \
-                          (ts_t0_chunk >= 4800) & (ts_t10_chunk >= 4500) & (ts_g_t5_chunk >= 4300) & (
-                                      ts_g_t10_chunk >= 4000)
-                cond4_2 = mask_tc2 & (lgp_t5_chunk >= 240) & (lgp_t10_chunk >= 165) & \
-                          (ts_t0_chunk >= 4500) & (ts_t10_chunk >= 3600) & (ts_g_t5_chunk >= 4000) & (
-                                      ts_g_t10_chunk >= 3200)
-                cond3_2 = mask_tc2 & (lgp_t5_chunk >= 200) & (lgp_t10_chunk >= 120) & \
-                          (ts_t0_chunk >= 3600) & (ts_t10_chunk >= 3000) & (ts_g_t5_chunk >= 3200) & (
-                                      ts_g_t10_chunk >= 2700)
-                cond2_2 = mask_tc2 & (lgp_t5_chunk >= 120) & (lgp_t10_chunk >= 90) & \
-                          (ts_t0_chunk >= 1600) & (ts_t10_chunk >= 1200)
+                out_tc2 = np.select(
+                    [
+                        mask_tc2 & (lgp_t5_chunk >= 360) & (lgp_t10_chunk >= 330) &
+                        (ts_t0_chunk >= 7200) & (ts_t10_chunk >= 7000),
 
-                out_chunk[cond8_2] = 8
-                out_chunk[cond7_2] = 7
-                out_chunk[cond6_2] = 6
-                out_chunk[cond5_2] = 5
-                out_chunk[cond4_2] = 4
-                out_chunk[cond3_2] = 3
-                out_chunk[cond2_2] = 2
+                        mask_tc2 & (lgp_t5_chunk >= 330) & (lgp_t10_chunk >= 270) &
+                        (ts_t0_chunk >= 5700) & (ts_t10_chunk >= 5500),
 
-                # Assign processed chunk to the full raster
+                        mask_tc2 & (lgp_t5_chunk >= 300) & (lgp_t10_chunk >= 240) &
+                        (ts_t0_chunk >= 5400) & (ts_t10_chunk >= 5100) &
+                        (ts_g_t5_chunk >= 5100) & (ts_g_t10_chunk >= 4800),
+
+                        mask_tc2 & (lgp_t5_chunk >= 270) & (lgp_t10_chunk >= 180) &
+                        (ts_t0_chunk >= 4800) & (ts_t10_chunk >= 4500) &
+                        (ts_g_t5_chunk >= 4300) & (ts_g_t10_chunk >= 4000),
+
+                        mask_tc2 & (lgp_t5_chunk >= 240) & (lgp_t10_chunk >= 165) &
+                        (ts_t0_chunk >= 4500) & (ts_t10_chunk >= 3600) &
+                        (ts_g_t5_chunk >= 4000) & (ts_g_t10_chunk >= 3200),
+
+                        mask_tc2 & (lgp_t5_chunk >= 200) & (lgp_t10_chunk >= 120) &
+                        (ts_t0_chunk >= 3600) & (ts_t10_chunk >= 3000) &
+                        (ts_g_t5_chunk >= 3200) & (ts_g_t10_chunk >= 2700),
+
+                        mask_tc2 & (lgp_t5_chunk >= 120) & (lgp_t10_chunk >= 90) &
+                        (ts_t0_chunk >= 1600) & (ts_t10_chunk >= 1200),
+                    ],
+                    [8, 7, 6, 5, 4, 3, 2],
+                    default=1
+                ).astype(np.int8)
+
+                out_chunk[mask_tc1] = out_tc1[mask_tc1]
+                out_chunk[mask_tc2] = out_tc2[mask_tc2]
                 multi_crop_irr[r0:r1, c0:c1] = out_chunk
+
         if self.set_mask:
             return [np.where(self.im_mask, multi_crop_rain, np.nan), np.where(self.im_mask, multi_crop_irr, np.nan)]
         else:
