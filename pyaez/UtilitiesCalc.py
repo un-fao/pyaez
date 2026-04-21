@@ -72,19 +72,10 @@ def compute_chunk_size_multi(arrays, extra_arrays=None):
 
     # Clamp
     chunk_dim = max(min_chunk, min(chunk_dim, max_chunk))
-    print(chunk_dim)
+
 
     return chunk_dim
 
-    pixels_per_chunk = target_mem // bytes_per_pixel
-
-    # Convert to square chunk
-    chunk_dim = int(np.sqrt(pixels_per_chunk))
-
-    # Clamp
-    chunk_dim = max(min_chunk, min(chunk_dim, max_chunk))
-
-    return chunk_dim
 
 def interpMonthlyToDaily( monthly_vector, cycle_begin, cycle_end, no_minus_values=False):
     """Interpolate monthly climate data to daily climate data
