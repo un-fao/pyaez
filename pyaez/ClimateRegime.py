@@ -1897,7 +1897,7 @@ class ClimateRegime(object):
             raise Exception('Provide "I" or "R".')
 
         H, W = self.im_height, self.im_width
-        doy = 366 if self.leap_year else 365
+
 
         monthly_shortrad = np.zeros((H, W, 12))
         monthly_pr = np.zeros((H, W, 12))
@@ -2011,9 +2011,21 @@ class ClimateRegime(object):
                 cond2 = (tadif0 > 35) & mask
                 cond3 = (tadif0 < 20) & mask
 
+                out_chunk = np.zeros((r1 - r0, c1 - c0), dtype=np.float32)
+
+
                 out_chunk[cond1] = cbtr1
                 out_chunk[cond2] = cbtr1 + (cbtr2 - cbtr1) * (35 - tadif0) / 15
                 out_chunk[cond3] = cbtr2
+
+                cbtr = out_chunk[:, :, np.newaxis]
+
+                # three criteria must be satisfied for dormancy (hibernation period) determination
+                # 1. Average Temperature must be less than 5
+                # 2. Dormancy period must be less than 200 days
+                # 3. Average Temperature must satisfy crop-specific temperature threshold.
+
+                dormancy_days = (chunk < 5) & (chunk >= cbtr)
 
                 idx = np.argmax(dormancy_days, axis=2)
 
