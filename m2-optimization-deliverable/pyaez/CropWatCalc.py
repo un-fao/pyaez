@@ -4,6 +4,7 @@ Crop Water Calculation USING FORTRAN ROUTINE
 2020: N. Lakmal Deshapriya and Thaileng Thol
 2023: Swun Wunna Htet (Dec)
 2024: Swun Wunna Htet (Dec)
+2026: Kellar Brown (June)
 Reference: http://oar.icrisat.org/198/1/316_2009_GTAE_55_Poten_obt_yield_in_SAT.pdf
 
 Modifications
