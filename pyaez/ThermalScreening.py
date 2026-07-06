@@ -51,7 +51,8 @@ def getReductionFactorNumba(set_Tsum_screening:bool, LnS, LsO, LO, HnS, HsO, HO,
 
     # TSUM screening
     if set_Tsum_screening:
-        #Start TSUM screening
+        # Start TSUM screening
+        # Optimal range
         if tsum0 in range(LO, HO):
             f1 = 1.
             fc1_final = min(f1, fc1_final)

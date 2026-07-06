@@ -51,6 +51,22 @@ class CropSimulation(object):
     
     """--------------------- MANDATORY FUNCTIONS START HERE --------------------------"""
 
+    def load_clim_reg_data(self):
+        
+        tclimate = gdal.Open(rf"./data_output/NB1/{self.country_name.lower()}_ThermalClimate_{self.year}.tif").ReadAsArray()
+        permafrost_class = gdal.Open(rf"./data_output/NB1/{self.country_name.lower()}_permafrost_{self.year}.tif").ReadAsArray()
+        
+        
+        # Thermal Climate screening
+        # aez.setThermalClimateScreening(tclimate, no_t_climate=[6,7,8,9,10,11,12])
+        self.setThermalClimateScreening(tclimate, no_t_climate=[])
+        
+        # New Thermal Screening: Permafrost Screening
+        self.setPermafrostScreening(permafrost_class= permafrost_class)
+        
+
+        self.ImportLGPandLGPT()
+        
     def setMonthlyClimateAndWaterData(self, min_temp, max_temp, precipitation, short_rad, wind_speed, rel_humidity, Sa = 100., D = 1.):
         """
         (MANDATORY FUNCTION)
@@ -447,20 +463,25 @@ class CropSimulation(object):
     
     
     
-    def ImportLGPandLGPT(self, lgp, lgpt0, lgpt5, lgpt10):
+    def ImportLGPandLGPT(self):
         """
         (MANDATORY FUNCTION)
         Importing LGP and temperature growing period data.
 
         Args:
-            lgp (2D NumPy Array): Length of Growing Period [Unit: Days].
-            lgpt0 (2D NumPy Array): Temperature Growing Period at 0℃ threshold [Unit: Days]. 
-            lgpt5 (2D NumPy Array): Temperature Growing Period at 5℃ threshold [Unit: Days]. 
-            lgpt10 (2D NumPy Array): Temperature Growing Period at 10℃ threshold [Unit: Days].
-
+            None.
+            
         Return:
             None.
         """
+
+        # Reading the gp outputs from module 1
+        lgp = gdal.Open(rf'./data_output/NB1/{self.country_name}_lgplongest_{self.year}.tif').ReadAsArray()
+        lgpt0 = gdal.Open(rf'./data_output/NB1/{self.country_name}_LGPt0_{self.year}.tif').ReadAsArray()
+        lgpt5 = gdal.Open(rf'./data_output/NB1/{self.country_name}_LGPt5_{self.year}.tif').ReadAsArray()
+        lgpt10 = gdal.Open(rf'./data_output/NB1/{self.country_name}_LGPt10_{self.year}.tif').ReadAsArray()
+        #lgp_equv = gdal.Open(rf'./data_output/NB1/{aez.country_name}_LGPEquivalent_{aez.year}.tif').ReadAsArray()
+    
         self.LGP = lgp
         self.LGPT0 = lgpt0
         self.LGPT5 = lgpt5
@@ -1329,6 +1350,73 @@ class CropSimulation(object):
 #"""------------------    IMPORTANT FUNCTIONALITIES TO CROP SIMULATIONS ------------------------------------"""
 # These important functionalities are not embedded within Module 2 object class for future modification purposes.
 
+def classifyFinalYield(est_yield):
+    """
+    Classify estimated crop yield values into suitability classes.
+
+    This function assigns each cell in the estimated yield map to one of five
+    suitability classes based on its relative position between the minimum and
+    maximum positive yield values:
+
+        Class 5 (Very suitable): yield >= 80% of the range above min yield
+        Class 4 (Suitable):      yield >= 60% and < 80%
+        Class 3 (Moderate):      yield >= 40% and < 60%
+        Class 2 (Marginal):      yield >= 20% and < 40%
+        Class 1 (Not suitable):  yield > 0% and < 20%
+
+    Parameters
+    ----------
+    est_yield : numpy.ndarray
+        2D array of estimated yields (numeric). Zero or negative values
+        are ignored when computing thresholds.
+
+    Returns
+    -------
+    est_yield_class : numpy.ndarray
+        Array of the same shape as `est_yield` with integer class codes:
+        {0: no data or non-positive yield, 1–5: suitability classes}.
+
+    Notes
+    -----
+    - Thresholds are computed using the min and max of positive yields only.
+    - Classification uses inclusive upper bounds for each range.
+    - Output classes:
+        0 = no data / yield <= 0
+        1 = not suitable
+        2 = marginally suitable
+        3 = moderately suitable
+        4 = suitable
+        5 = very suitable
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> yields = np.array([[0, 1.5, 3.0],
+    ...                    [4.5, 6.0, 8.0]])
+    >>> classifyFinalYield(yields)
+    array([[0., 1., 2.],
+           [3., 4., 5.]])
+    """
+
+    est_yield_max = np.amax( est_yield[est_yield>0] )
+    est_yield_min = np.amin( est_yield[est_yield>0] )
+
+    est_yield_20P = (est_yield_max-est_yield_min)*(20/100) + est_yield_min
+    est_yield_40P = (est_yield_max-est_yield_min)*(40/100) + est_yield_min
+    est_yield_60P = (est_yield_max-est_yield_min)*(60/100) + est_yield_min
+    est_yield_80P = (est_yield_max-est_yield_min)*(80/100) + est_yield_min
+
+    est_yield_class = np.zeros(est_yield.shape)
+
+    est_yield_class[ np.all([0<est_yield, est_yield<=est_yield_20P], axis=0) ] = 1 # not suitable
+    est_yield_class[ np.all([est_yield_20P<est_yield, est_yield<=est_yield_40P], axis=0) ] = 2 # marginally suitable
+    est_yield_class[ np.all([est_yield_40P<est_yield, est_yield<=est_yield_60P], axis=0) ] = 3 # moderately suitable
+    est_yield_class[ np.all([est_yield_60P<est_yield, est_yield<=est_yield_80P], axis=0) ] = 4 # suitable
+    est_yield_class[ np.all([est_yield_80P<est_yield], axis=0)] = 5 # very suitable
+
+    return est_yield_class
+    
+
 def simulateCropCycleOneLocation(start_doy:int, end_doy:int, step_doy:int, leap_year:bool, cycle_len_check_data, LAI_HI_data, climate_data,
                                     lat:float, elev:float, plant_height:float, set_TSUM_screening:bool, LnS:int, LsO:int, LO:int, HnS:int, HsO:int, HO:int,
                                 set_CropSpecificRule:bool, data, legume:int, adaptability:int,
@@ -1436,7 +1524,7 @@ def CropCycleLooping(start_doy:int, end_doy:int, step_doy:int, climate_data, lgp
         else:
             tsum0 = getTemperatureSum(mean_T[i_cycle:i_cycle+cycle_len], 0)
         
-        if hibernation_flag:
+        if hibernation_flag and not perennial_flag:
             #Critical breaking temperature (cbtr)
             jd1, jd2, vern_factor = check_vernalization(mean_T[i_cycle:i_cycle+365],crop_name) 
         else:
