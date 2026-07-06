@@ -5,6 +5,7 @@ Thermal Screening
 2022/2023: Swun Wunna Htet
 2023 (Dec): Swun Wunna Htet
 2024 (Dec): Swun Wunna Htet
+2026 (June): Kellar Brown
 
 Modification:
 1. LGPT screening is now removed because of the new consideration with LGPT and LGP in Module 2.
