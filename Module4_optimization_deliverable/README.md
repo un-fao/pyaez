@@ -50,11 +50,5 @@ Outputs go to `Outputs/optimized/` by default.
 
 Delete or ignore `_opt.py` and keep using `PyAEZ_Module4_Step1_Soil_Slope_v3.py`.
 
-## Not included (on purpose)
-
-- Original v3 (you already have it)
-- Step 2 script
-- Input data / Tanzania run outputs
-- Local baseline/profiling helper scripts
 
 Details: [docs/OPTIMIZATION_NOTES.md](docs/OPTIMIZATION_NOTES.md) · Plain-language: [docs/OPTIMIZATION_NOTES_SIMPLE.md](docs/OPTIMIZATION_NOTES_SIMPLE.md)
