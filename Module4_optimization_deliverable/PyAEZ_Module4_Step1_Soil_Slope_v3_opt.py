@@ -48,7 +48,7 @@ below with "# OPT:" comments — do not change weight/resample formulas.
 Author / Credits
 ----------------
 Shahla Asgharinia (FAO_NSLD)
-MSU optimization notes layered on FAO v3 (paths, filtering, vectorize, cache)
+Kellar Brown (MSU)
 """
 # -----------------------------
 # -----------------------------
