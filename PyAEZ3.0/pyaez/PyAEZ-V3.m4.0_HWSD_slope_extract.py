@@ -46,9 +46,15 @@ vectorized aggregations only. See OPTIMIZATION_NOTES.md. Key opts marked
 below with "# OPT:" comments — do not change weight/resample formulas.
 
 Author / Credits
-----------------
-Shahla Asgharinia (FAO_NSLD)
-MSU optimization notes layered on FAO v3 (paths, filtering, vectorize, cache)
+# -----------------------------------------------------------------------------
+# Development and technical coordination:
+# Shahla Asgharinia
+# Food and Agriculture Organization of the United Nations (FAO)
+# Land and Water Division, Geospatial Unit (NSLD)
+#
+# Performance optimization:
+# Mississippi State University
+# -----------------------------------------------------------------------------
 """
 # -----------------------------
 # -----------------------------
@@ -80,8 +86,6 @@ import matplotlib.pyplot as plt
 from matplotlib import colors
 
 from shapely.geometry import mapping, box
-
-
 
 
 # -----------------------------
