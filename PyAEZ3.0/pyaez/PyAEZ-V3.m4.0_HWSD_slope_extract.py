@@ -111,11 +111,9 @@ def _stage(label: str, t0=None):
 # %%  USER INPUTS — EDIT THIS SECTION 
 # Working directory
 # -----------------------------
-# OPT: FAO v3 hardcodes Shahla's OneDrive + "Inputs/". Resolve relative to
-# this script so the Drive package ("input data/") works on any machine.
 BASE_DIR = Path(__file__).resolve().parent
 INPUT_DIR = BASE_DIR / "input data"
-OUTPUT_DIR = BASE_DIR / "Outputs" / "optimized"
+OUTPUT_DIR = BASE_DIR / "Outputs" 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # OPT: toggles for profiling / skipping matplotlib QC / slope NPZ cache.
