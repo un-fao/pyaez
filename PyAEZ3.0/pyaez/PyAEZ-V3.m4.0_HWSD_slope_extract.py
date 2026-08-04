@@ -46,15 +46,15 @@ vectorized aggregations only. See OPTIMIZATION_NOTES.md. Key opts marked
 below with "# OPT:" comments — do not change weight/resample formulas.
 
 Author / Credits
-# -----------------------------------------------------------------------------
-# Development and technical coordination:
-# Shahla Asgharinia
-# Food and Agriculture Organization of the United Nations (FAO)
-# Land and Water Division, Geospatial Unit (NSLD)
-#
-# Performance optimization:
-# Mississippi State University
-# -----------------------------------------------------------------------------
+-----------------------------------------------------------------------------
+Development and technical coordination:
+ Shahla Asgharinia
+ Food and Agriculture Organization of the United Nations (FAO)
+ Land and Water Division, Geospatial Unit (NSLD)
+
+Performance optimization:
+ Mississippi State University
+-----------------------------------------------------------------------------
 """
 # -----------------------------
 # -----------------------------
