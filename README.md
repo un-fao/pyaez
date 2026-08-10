@@ -94,7 +94,6 @@ Python-AEZ-FAO/
 │   ├── data_output/
 │   │
 │   ├── utilities/
-│   │   ├── setup.yml/
 │   │   ├── module0/
 │   │   ├── module1/
 │   │   ├── module2/
@@ -108,6 +107,7 @@ Python-AEZ-FAO/
 │
 ├── LICENSE
 ├── CITATION.cff
+├── environment_pyaez.yml
 └── README.md
 ```
 
