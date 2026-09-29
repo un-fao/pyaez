@@ -10,71 +10,20 @@ title: "PyAEZ Version 3.0: A Modular Python Framework for Agro-Ecological Zoning
 type: software
 
 version: "3.0.0-development"
+
 date-released: 2026-MM-DD
-  
+
 authors:
-  - family-names: "Asgharinia"
-    given-names: "Shahla"
-
-  - family-names: "Spiller"
-    given-names: "Dario"
-
-  - family-names: "Mukaratirwa"
-    given-names: "Rutendo Tadiwa"
-
-  - family-names: "Chiozza"
-    given-names: "Federica"
-
-  - family-names: "Peiser"
-    given-names: "Livia"
-
-  - family-names: "Fischer"
-    given-names: "Günther"
-
-  - family-names: "Brown"
-    given-names: "Kellar"
-
-  - family-names: "Tuccio"
-    given-names: "Riley"
-
-  - family-names: "Htet"
-    given-names: "Swun Wunna"
-
-  - family-names: "Boonma"
-    given-names: "Kittiphon"
-
-  - family-names: "Franceschini"
-    given-names: "Gianluca"
-
-  - family-names: "Deshapriya"
-    given-names: "N. Lakmal"
-
-  - family-names: "Thol"
-    given-names: "Thaileng"
-
-  - family-names: "Gunasekara"
-    given-names: "Kavinda"
-
-  - family-names: "Shrestha"
-    given-names: "Rajendra"
-
-  - family-names: "Nachtergaele"
-    given-names: "Freddy"
-
-  - family-names: "Petri"
-    given-names: "Monica"
-
-  - family-names: "Damen"
-    given-names: "Beau"
+  - name: "Food and Agriculture Organization of the United Nations"
 
 abstract: >-
   PyAEZ is an open and modular Python implementation of the
-  Agro-Ecological Zoning framework. It provides transparent,
+  Agro-Ecological Zoning (AEZ) framework. It provides transparent,
   code-based workflows for climate-regime analysis, crop simulation,
   climatic-constraint assessment, soil and terrain evaluation, and
   agro-ecological suitability analysis. PyAEZ supports global,
-  national, and subnational datasets, including digital soil mapping,
-  climate, crop, terrain, and user-defined scenario data.
+  national, and subnational datasets, including soil, climate, crop,
+  terrain, and user-defined scenario data.
 
 keywords:
   - agro-ecological zoning
@@ -90,8 +39,8 @@ keywords:
   - Python
   - FAO
 
-repository-code: "https://github.com/DarioSpiller/Python-AEZ-FAO"
+repository-code: "https://github.com/un-fao/pyaezv3/"
 
-url: "https://github.com/DarioSpiller/Python-AEZ-FAO"
+url: "https://github.com/un-fao/pyaez/"
 
 license: "SEE-LICENSE-IN-REPOSITORY"
