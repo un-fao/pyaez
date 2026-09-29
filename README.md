@@ -120,35 +120,7 @@ used.
 ### Recommended citation
 
 
-### BibTeX
-@software{pyaez_v3_2026,
-  title     = {PyAEZ Version 3.0: A Modular Python Framework for Agro-Ecological Zoning},
-  author    = {
-    Shahla Asgharinia and
-    Dario Spiller and
-    Rutendo Tadiwa Mukaratirwa and
-    Federica Chiozza and
-    Livia Peiser and
-    Günther Fischer and
-    William Kellar Brown and
-    Riley Tuccio and
-    Swun Wunna Htet and
-    Kittiphon Boonma and
-    Gianluca Franceschini and
-    N. Lakmal Deshapriya and
-    Thaileng Thol and
-    Kavinda Gunasekara and
-    Rajendra Shrestha and
-    Freddy Nachtergaele and
-    Monica Petri and
-    Beau Damen
-  },
-  year      = {2026},
-  version   = {3.0},
-  publisher = {GitHub},
-  url       = {https://github.com/DarioSpiller/Python-AEZ-FAO},
-  note      = {Specify the release tag or Git commit used}
-}
+
 
 ## License
 See the repository LICENSE file for the applicable terms.
