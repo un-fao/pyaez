@@ -119,12 +119,6 @@ used.
 
 ### Recommended citation
 
-Asgharinia, S., Spiller, D., Mukaratirwa, R.T., Chiozza, F., Peiser, L.,
-Fischer, G., Brown, W. K., Tuccio, R., Htet, S.W., Boonma, K.,
-Franceschini, G., Deshapriya, N.L., Thol, T., Gunasekara, K.,
-Shrestha, R., Nachtergaele, F., Petri, M. and Damen, B. 2026.
-PyAEZ Version 3.0: A modular Python framework for Agro-Ecological
-Zoning. GitHub repository.
 
 ### BibTeX
 @software{pyaez_v3_2026,
