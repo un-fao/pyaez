@@ -1,88 +1,207 @@
-[![PyAEZ](https://img.shields.io/badge/PyAEZ-3.0%20development-orange.svg)](#pyaez-version-30)
-[![Release status](https://img.shields.io/badge/release-forthcoming-yellow.svg)](#release-status)
-[![Python](https://img.shields.io/badge/Python-3.14-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
-[![Developed by](https://img.shields.io/badge/Developed%20by-FAO%20NSL-116AAB.svg)](https://www.fao.org/land-water/en/)
+# PyAEZ version 3.0
 
-## Modules
+PyAEZ v3.0 is the current development version of PyAEZ. It represents a
+restructuring and further development of the PyAEZ implementation, with
+emphasis on modularity, reproducibility and easier application with
+different datasets and assessment scenarios.
 
-The current PyAEZ Version 3.0 repository contains Module 0 through Module V.
+> **Development status:** PyAEZ v3.0 is currently under development.
+> Interfaces, calculation procedures, input requirements and repository
+> organization may change before the final release.
 
-| Module | Name | Main purpose |
-|---|---|---|
-| Module 0 | Inputs and Scenario Preparation | Prepares climate, crop, soil, terrain and other user-defined input data. |
-| Module I | Climate Regime | Calculates agro-climatic indicators, temperature regimes, moisture regimes and growing-period characteristics. |
-| Module II | Crop Simulation | Simulates crop calendars, biomass production, crop water requirements and attainable yields. |
-| Module III | Climatic Constraints | Applies crop-specific climatic constraints and climate-related yield reductions. |
-| Module IV | Soil and Terrain Constraints | Assesses soil quality, soil suitability, slope and terrain effects on crop production. |
-| Module V | Agro-Ecological Suitability | Integrates climate, crop, soil and terrain results into final suitability and yield outputs. |
-| Utilities | Supporting Tools | Provides preprocessing, validation, raster processing and module-specific utility functions. |
-
-The broader AEZ framework may also include economic suitability analysis.
-This component is not currently included in the PyAEZ Version 3.0 workflow.
+For an overview of PyAEZ, the Agro-Ecological Zoning (AEZ) methodology,
+the PyAEZ framework, scientific scope, references and development history,
+see the [main PyAEZ README](../README.md).
 
 ---
 
-## Step-by-Step Workflow
+## What's new in version 3.0?
 
-The following Jupyter notebooks provide worked examples for the main
-modules:
+PyAEZ v3.0 introduces a revised implementation and organization of the
+PyAEZ codebase.
 
-1. `M0_Inputs.ipynb`
-2. `M1_ClimateRegime.ipynb`
-3. `M2_CropSimulation.ipynb`
-4. `M3_ClimaticConstraints.ipynb`
-5. `M4_SoilTerrainConstraints.ipynb`
-6. `M5_AgroecologicalSuitability.ipynb`
+The main changes and additions relative to earlier PyAEZ implementations
+will be documented here as development progresses.
 
-The notebooks should generally be run sequentially because outputs from
-one module may be required by the following modules.
+**To be documented:**
+
+- major methodological or algorithmic changes;
+- revised or newly implemented calculation procedures;
+- changes to input-data handling and preprocessing;
+- changes to the software and module architecture;
+- new or revised utilities;
+- changes to outputs and data organization; and
+- other functionality introduced in v3.0.
 
 ---
 
-## Repository Structure
+## Installation
+
+PyAEZ v3.0 requires Python and the dependencies used by the individual
+modules and supporting utilities.
+
+The repository includes:
 
 ```text
-Python-AEZ-FAO/
+environment_pyaez.yml
+```
+
+for configuring the PyAEZ environment.
+
+> **To be documented:** Confirm the recommended installation procedure,
+> supported Python version, environment name and installation commands.
+
+---
+
+## Getting started
+
+PyAEZ v3.0 is currently implemented through module-specific Python code
+and Jupyter Notebooks.
+
+The main notebooks are:
+
+```text
+M0_Inputs.ipynb
+M1_ClimateRegime.ipynb
+M2_CropSimulation.ipynb
+M3_ClimaticConstraints.ipynb
+M4_SoilTerrainConstraints.ipynb
+M5_AgroecologicalSuitability.ipynb
+```
+
+For a complete assessment, the notebooks generally follow the sequence:
+
+```text
+M0 → M1 → M2 → M3 → M4 → M5
+```
+
+Start with `M0_Inputs.ipynb` to prepare the input data and assessment
+scenario before proceeding to the subsequent calculation stages.
+
+---
+
+## Input data
+
+Input data preparation for PyAEZ v3.0 is handled through Module 0 and the
+associated utilities.
+
+Users should refer to `M0_Inputs.ipynb` and the corresponding documentation
+for the input requirements of the current implementation.
+
+> **To be documented:** Provide a concise description of required input
+> files, formats, directory organization and any example datasets distributed
+> with PyAEZ v3.0.
+
+---
+
+## Running PyAEZ v3.0
+
+A typical use of the current implementation is:
+
+```text
+1. Configure the PyAEZ Python environment
+2. Prepare the required input datasets
+3. Run M0_Inputs.ipynb
+4. Run the subsequent module notebooks as required
+5. Review intermediate and final outputs
+```
+
+Individual components may also be run independently where appropriate.
+
+Detailed module-specific instructions should be followed when modifying
+input data, parameters or calculation procedures.
+
+---
+
+## Outputs
+
+Outputs generated by PyAEZ v3.0 are stored in the designated output
+directories and may include both intermediate module results and final
+assessment outputs.
+
+> **To be documented:** Describe the principal output files, formats,
+> naming conventions and directory structure used by v3.0.
+
+---
+
+## Repository structure
+
+The current PyAEZ v3.0 development environment is organized as follows:
+
+```text
+PyAEZ3.0/
+├── module0/
+├── module1/
+├── module2/
+├── module3/
+├── module4/
+├── module5/
 │
-├── PyAEZ3.0/
+├── data_input/
+├── data_output/
+│
+├── utilities/
 │   ├── module0/
 │   ├── module1/
 │   ├── module2/
 │   ├── module3/
 │   ├── module4/
-│   ├── module5/
-│   │
-│   ├── data_input/
-│   ├── data_output/
-│   │
-│   ├── utilities/
-│   │   ├── module0/
-│   │   ├── module1/
-│   │   ├── module2/
-│   │   ├── module3/
-│   │   ├── module4/
-│   │   └── module5/
-│   ├── pyaez/
-│   ├── docs/
-│   ├── website_docs/
-│   └── README.md
+│   └── module5/
 │
-├── LICENSE
-├── CITATION.cff
-├── environment_pyaez.yml
+├── pyaez/
+├── docs/
+├── website_docs/
 └── README.md
 ```
 
+This structure reflects the current development organization and may change
+before the final release.
+
+---
+
+## Documentation
+
+Technical and user documentation for PyAEZ v3.0 is maintained alongside
+the source code:
+
+```text
+docs/
+website_docs/
+```
+
+Module-specific documentation and instructions are also provided through
+the corresponding Jupyter Notebooks and utilities.
+
+For the overall AEZ methodology, PyAEZ framework, relationship to GAEZ,
+scientific scope and limitations, see the
+[main PyAEZ README](../README.md).
+
+---
+
+## Known limitations and development status
+
+PyAEZ v3.0 remains under active development. Some components, interfaces
+and documentation may therefore be incomplete or subject to change.
+
+> **To be documented:** Add any v3.0-specific limitations, components still
+> under development and functionality planned for the final release.
+
+---
+
 ## Citation
 
-When using PyAEZ Version 3.0 in a publication, report or technical
-assessment, cite the repository and specify the release tag or Git commit
-used.
+If you use PyAEZ v3.0 in research, technical assessments, reports,
+publications or derived software, please identify the version used.
 
-### Recommended citation
+The recommended citation metadata are provided in
+[`CITATION.cff`](../CITATION.cff).
 
+For reproducibility, users should record the PyAEZ version, release tag or
+Git commit used in an assessment.
 
-
+---
 
 ## License
-See the repository LICENSE file for the applicable terms.
+
+See [`LICENSE`](../LICENSE) for the terms governing the use, modification
+and distribution of PyAEZ.
