@@ -1,17 +1,12 @@
 # PyAEZ version 3.0
 
-PyAEZ v3.0 is the current development version of PyAEZ. It represents a
-restructuring and further development of the PyAEZ implementation, with
-emphasis on modularity, reproducibility and easier application with
-different datasets and assessment scenarios.
+PyAEZ v3.0 is the current development version of PyAEZ. It introduces a
+restructured implementation with emphasis on modularity, reproducibility,
+and easier application across different datasets and assessment scenarios.
 
 > **Development status:** PyAEZ v3.0 is currently under development.
-> Interfaces, calculation procedures, input requirements and repository
+> Interfaces, calculation procedures, input requirements, and repository
 > organization may change before the final release.
-
-For an overview of PyAEZ, the Agro-Ecological Zoning (AEZ) methodology,
-the PyAEZ framework, scientific scope, references and development history,
-see the [main PyAEZ README](../README.md).
 
 ---
 
