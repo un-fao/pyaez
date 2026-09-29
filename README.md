@@ -214,24 +214,20 @@ PyAEZ originated from efforts to make Agro-Ecological Zoning (AEZ)
 methodologies more accessible for national and subnational applications
 through an open and reproducible Python-based modelling environment.
 
-PyAEZ has benefited from collaboration between the Food and Agriculture
-Organization of the United Nations (FAO), the Asian Institute of Technology -
-Geo-informatics Center (AIT-GIC), and Mississippi State University (MSU).
+PyAEZ has benefited from collaboration between FAO, the Asian Institute of
+Technology - Geo-informatics Center (AIT-GIC), the International Institute
+for Applied Systems Analysis (IIASA), and Mississippi State University (MSU).
 
-The development of PyAEZ at FAO has benefited from the contributions of
+The development of PyAEZ at FAO has benefited from contributions from
 Shahla Asgharinia, Dario Spiller, Rutendo Tadiwa Mukaratirwa,
-Federica Chiozza, Livia Peiser, Gianluca Franceschini, Matieu Henry and Beau Damen.
+Federica Chiozza, Livia Peiser, Gianluca Franceschini, Matieu Henry,
+and Beau Damen.
 
 PyAEZ has also benefited from technical contributions and advice from
-Günther Fischer of the International Institute for Applied Systems Analysis
-(IIASA) and Freddy Nachtergaele.
+Günther Fischer (IIASA) and Freddy Nachtergaele.
 
-The initial PyAEZ implementation was supported through FAO initiatives on
-AEZ capacity development and the *Strengthening Agro-climatic Monitoring
-and Information Systems to Improve Adaptation to Climate Change and Food
-Security in Lao PDR (GCP/LAO/021/LDF)* (SAMIS) project. Further information
-on the earlier implementation and its contributors is available in the
-[AIT-GIC PyAEZ repository](https://github.com/gicait/PyAEZ).
+Further information on the earlier implementation and its contributors is
+available in the [AIT-GIC PyAEZ repository](https://github.com/gicait/PyAEZ).
 
 FAO acknowledges all institutions, projects and individuals that have
 contributed to the development and continued evolution of PyAEZ.
