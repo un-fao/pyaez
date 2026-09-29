@@ -12,11 +12,9 @@ and easier application across different datasets and assessment scenarios.
 
 ## What's new in version 3.0?
 
-PyAEZ v3.0 introduces a revised implementation and organization of the
-PyAEZ codebase.
+PyAEZ v3.0 introduces a revised implementation and organization of the PyAEZ codebase.
 
-The main changes and additions relative to earlier PyAEZ implementations
-will be documented here as development progresses.
+The main changes and additions relative to earlier PyAEZ implementations will be documented here as development progresses.
 
 **To be documented:**
 
@@ -24,6 +22,7 @@ will be documented here as development progresses.
 - revised or newly implemented calculation procedures;
 - changes to input-data handling and preprocessing;
 - changes to the software and module architecture;
+- integration of PyAEZ and CAVApy;
 - new or revised utilities;
 - changes to outputs and data organization; and
 - other functionality introduced in v3.0.
