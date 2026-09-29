@@ -218,19 +218,25 @@ PyAEZ has benefited from collaboration between FAO, the Asian Institute of
 Technology - Geo-informatics Center (AIT-GIC), the International Institute
 for Applied Systems Analysis (IIASA), and Mississippi State University (MSU).
 
-The development of PyAEZ at FAO has benefited from contributions from
-Shahla Asgharinia, Dario Spiller, Rutendo Tadiwa Mukaratirwa,
+The current development of PyAEZ at FAO has benefited from contributions
+from Shahla Asgharinia, Dario Spiller, Rutendo Tadiwa Mukaratirwa,
 Federica Chiozza, Livia Peiser, Gianluca Franceschini, Matieu Henry,
 and Beau Damen.
 
 PyAEZ has also benefited from technical contributions and advice from
 Günther Fischer (IIASA) and Freddy Nachtergaele.
 
+The current development also includes the integration of PyAEZ and CAVApy,
+in collaboration with the FAO OCB Division.
+
 Further information on the earlier implementation and its contributors is
 available in the [AIT-GIC PyAEZ repository](https://github.com/gicait/PyAEZ).
 
 FAO acknowledges all institutions, projects and individuals that have
-contributed to the development and continued evolution of PyAEZ.
+contributed to the development and evolution of PyAEZ.
+
+The current development of PyAEZ at FAO is financially supported by the
+SoilFER programme.
 
 ---
 
@@ -273,3 +279,10 @@ governing the use, modification and distribution of PyAEZ.
 9. FAO and IIASA. 2026. *Soil Suitability Assessment Procedures for
    Conventional and Organic Farming Systems Used in Global
    Agro-Ecological Zoning Version 5*. Rome and Laxenburg, Austria.
+
+---
+
+## 🔗 Useful Links
+
+- 🐍 **FAO PyAEZ Website:** [Python package for Agro-Ecological Zoning (PyAEZ)](https://www.fao.org/geospatial/data-and-tools/tools/python-package-for-agro-ecological-zoning-(pyaez)/en)
+- 📖 **GAEZ v5 Documentation:** [GAEZ v5 Wiki](https://github.com/un-fao/gaezv5/wiki)
