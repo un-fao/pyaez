@@ -24,6 +24,14 @@ import pandas as pd
 from pyaez.ETOCalc import calculateETONumba
 from pyaez.UtilitiesCalc import generateLatitudeMap, interpMonthlyToDaily, averageDailyToMonthly
 import warnings
+import os
+import matplotlib.pyplot as plt
+
+try:
+    from osgeo import gdal
+except:
+    import gdal
+    
 warnings.filterwarnings('ignore')
 
 np.round_ = np.round
@@ -177,7 +185,52 @@ class ClimaticConstraints(object):
             self.lt10 = main['mean<10']
             self.lgpt10 = main['lgpt10']
             del(main)
+            
+    def setReductionFactors_fromM0(self, condition_type):
+        """
+        Load agro‑climatic reduction factors previously saved in HDF5 format.
     
+        This method reads the reduction factor tables for the three agro‑climatic
+        constraint categories (gte20, lt10, lgpt10) from an HDF5 file created by the
+        AEZ pre‑processing pipeline. Each table is stored as a pandas DataFrame.
+    
+        Parameters
+        ----------
+        file_path : str
+            Path to the HDF5 (.h5) file containing the stored reduction factor
+            DataFrames. The file must contain the following keys:
+            - "gte20"   : reduction factors for mean ≥ 20% probability
+            - "lt10"    : reduction factors for mean < 10% probability
+            - "lgpt10"  : reduction factors for length of growing period > 10 months
+    
+        Notes
+        -----
+        - This function does not perform validation on the structure of the loaded
+          DataFrames; it assumes they were saved using the AEZ utility functions.
+        - The loaded tables are assigned to the instance attributes:
+          `self.gte20`, `self.lt10`, and `self.lgpt10`.
+    
+        Returns
+        -------
+        None
+            The method updates the object's internal state but does not return data.
+    
+        Raises
+        ------
+        KeyError
+            If any of the required keys ("gte20", "lt10", "lgpt10") are missing
+            from the HDF5 file.
+        IOError
+            If the file cannot be opened or read.
+        """
+
+        file_path = f"./data_input/input_module3/M3_constraints_{self.crop_name}_{self.input_level}_{condition_type}.h5"
+        
+        # Reading and storing the saved file
+        with pd.HDFStore(file_path) as store:
+            self.gte20  = store["gte20"]
+            self.lt10   = store["lt10"]
+            self.lgpt10 = store["lgpt10"]    
 
     def calculateLGPagc(self, lgp, lgp_equv):
         """ Calculation of adjustted LGP for agro-climatic constraints.
@@ -241,7 +294,6 @@ class ClimaticConstraints(object):
                 # for LPG having 365 or 366, either 365+ or 365- will be selected
                 self.lgp_agc[i,j] = self.calculateLGPagc(lgp[i,j], lgp_equv[i,j])
                 
-
                 if self.lgp_agc[i,j] >=365 and self.months_P_gte_eto[i,j] == 12:
                     gte20 = (self.gte20.drop(columns = ['365-', 'type'])).to_numpy()
                     lt10 = (self.lt10.drop(columns=['365-', 'type'])).to_numpy()
@@ -339,7 +391,175 @@ class ClimaticConstraints(object):
             fc3 (2D-Numpy Array): agro-climatic constraint factor (fc3).
         """
         return self.fc3
+
+    def compute_yield(
+            self,
+            condition_type: str,
+            plot_results: bool = False
+        ):
+        """
+        Compute climate-adjusted yield and reduction factor for rainfed or irrigated
+        conditions, selecting the correct parameter file based on the crop name and
+        management level (HI/LI).
     
+        This function:
+          - Loads the baseline yield raster (NB2) for the requested condition,
+          - Loads agro-climatic indicators (LGP, LGPT10, LGPEquivalent) from NB1,
+          - Selects the appropriate parameter workbook (Module 3) by `crop_name` and `management`,
+          - Applies climatic reduction factors and constraints via `clim_con`,
+          - Returns the climate-adjusted yield and the overall reduction factor (Fc3),
+          - Optionally plots original yield, constrained yield, and Fc3.
+    
+        Parameters
+        ----------
+        self : pyaez.ClimaticConstraints.ClimaticConstraints
+            Configured climatic constraints object. Must provide:
+            `crop_name` attribute and methods:
+            `setReductionFactors(file_path)`,
+            `applyClimaticConstraints(...)`,
+            `getClimateAdjustedYield()`,
+            `getClimateReductionFactor()`.
+        condition_type : {'rainfed', 'irrigated'}
+            Production condition to compute. Determines which baseline yield raster
+            is loaded (NB2: `yld_rain` vs `yld_irr`) and which parameter file is used.
+        country_name : str
+            Country/study-area identifier used in NB1/NB2 filenames.
+        year : int or str
+            Year used in NB1/NB2 filenames. Accepts either `int` (e.g., 1990) or `str` (e.g., "1990").
+        management : {'HI','LI'}, optional
+            Parameter set selection:
+            - 'HI' → High-input workbooks (Module 3),
+            - 'LI' → Low-input workbooks (Module 3).
+            Raises `NameError` if not one of {'HI','LI'}.
+        plot_results : bool, optional
+            If True, displays three plots (original yield, climate-adjusted yield, Fc3).
+    
+        Returns
+        -------
+        clim_yield : numpy.ndarray
+            Climate-constrained yield map (same shape as input yield).
+        fc3 : numpy.ndarray
+            Overall climatic reduction factor (Fc3), values typically in [0, 1].
+    
+        Notes
+        -----
+        - **File dependencies**:
+            * NB2 baseline yield rasters in `data_output/NB2`:
+              `{country_name}_{crop_name}_yld_rain_{year}.tif` or `{country_name}_{crop_name}_yld_irr_{year}.tif`
+            * NB1 agro-climatic indicators in `data_output/NB1`:
+              `{country_name}_LGP_{year}.tif`,
+              `{country_name}_LGPt10_{year}.tif`,
+              `{country_name}_LGPEquivalent_{year}.tif`
+            * Module 3 parameter workbooks in `data_input/input_module3/`:
+              crop-specific `.xlsx` files (HI or LI set)
+        - **Crop name normalization**: The function derives `crop_key` from `self.crop_name`
+          by dropping trailing `_H` or `_L` and lowercasing (e.g., `"Maize_HI"` → `"maize"`).
+        - **Array shapes**: All rasters are expected to be co-registered (same extent/resolution/CRS).
+        - **Plotting**: Uses Matplotlib; `vmax` is set to the maximum of original vs. constrained yield.
+    
+        Raises
+        ------
+        ValueError
+            If `condition_type` is not one of {'rainfed','irrigated'} or if `crop_key` is unsupported.
+        NameError
+            If `management` is neither 'HI' nor 'LI'.
+        FileNotFoundError / OSError
+            If any of the required rasters or parameter files cannot be opened.
+    
+        Examples
+        --------
+        >>> clim_yield, fc3 = compute_yield(
+        ...     self,
+        ...     condition_type='rainfed',
+        ...     country_name='Ghana',
+        ...     year=1990,
+        ...     management='HI',
+        ...     plot_results=True
+        ... )
+        >>> clim_yield.shape, fc3.min(), fc3.max()
+           ((rows, cols), 0.0, 1.0)
+        """
+        
+        crop_name = self.crop_name
+        country_name = self.country_name
+        year = self.year
+        management = self.input_level
+        # Set working directory
+        work_dir=os.getcwd()
+    
+        # Validate condition type
+        if condition_type not in ["rainfed", "irrigated"]:
+            raise ValueError("condition_type must be 'rainfed' or 'irrigated'")
+    
+        # Apply reduction factors and constraints
+        self.setReductionFactors_fromM0(condition_type)
+
+        # Load yield map
+        if condition_type == "rainfed":
+            yield_map = gdal.Open(os.path.join(work_dir,f'data_output/NB2/{country_name}_{crop_name}_yld_rain_{year}.tif')).ReadAsArray()
+        else:
+            yield_map = gdal.Open(os.path.join(work_dir,f'data_output/NB2/{country_name}_{crop_name}_yld_irr_{year}.tif')).ReadAsArray()
+
+        # Load agro-climatic indicators
+        lgp = gdal.Open(os.path.join(work_dir, f'data_output/NB1/{country_name}_LGP_{year}.tif')).ReadAsArray()
+        lgp10 = gdal.Open(os.path.join(work_dir, f'data_output/NB1/{country_name}_LGPt10_{year}.tif')).ReadAsArray()
+        lgp_equv = gdal.Open(os.path.join(work_dir, f'data_output/NB1/{country_name}_LGPEquivalent_{year}.tif')).ReadAsArray()
+
+        
+        self.applyClimaticConstraints(
+            yield_input=yield_map,
+            lgp=lgp,
+            lgp_equv=lgp_equv,
+            lgpt10=lgp10,
+            omit_yld_0=True
+        )
+    
+        # Get results
+        clim_yield = self.getClimateAdjustedYield()
+        fc3 = self.getClimateReductionFactor()
+    
+        print(f"Computed {condition_type} yield for {crop_name} using {condition_type} management")
+    
+        # Optional plotting
+        if plot_results:
+            # Load mask (assuming mask is 1 inside country, 0 outside)
+            mask = gdal.Open(os.path.join(work_dir, f"data_input/{country_name}_rasterized.tif")).ReadAsArray()
+            
+            # Convert mask to boolean in case mask uses 255 or other codes
+            mask_bool = mask.astype(bool)
+            
+            # Apply mask to the three layers
+            yield_map_masked = np.where(mask_bool, yield_map, np.nan)
+            clim_yield_masked = np.where(mask_bool, clim_yield, np.nan)
+            fc3_masked = np.where(mask_bool, fc3, np.nan)
+            
+            # Common limits
+            vmax_yield = np.nanmax([np.nanmax(clim_yield_masked), np.nanmax(yield_map_masked)])
+            
+            plt.figure(figsize=(22, 9))
+            
+            # --- Plot 1: Original Yield ---
+            plt.subplot(1, 3, 1)
+            plt.imshow(yield_map_masked, vmax=vmax_yield)
+            plt.colorbar(shrink=0.6)
+            plt.title(f"Original {condition_type.capitalize()} Yield ({crop_name})")
+            
+            # --- Plot 2: Climate-Constrained Yield ---
+            plt.subplot(1, 3, 2)
+            plt.imshow(clim_yield_masked, vmax=vmax_yield)
+            plt.colorbar(shrink=0.6)
+            plt.title(f"Climate-Constrained Yield ({crop_name})")
+            
+            # --- Plot 3: Reduction Factor Fc3 ---
+            plt.subplot(1, 3, 3)
+            plt.imshow(fc3_masked, vmax=1)
+            plt.colorbar(shrink=0.6)
+            plt.title(f"Reduction Factor Fc3 ({crop_name})")
+            
+            plt.tight_layout()
+            plt.show()
+        return clim_yield, fc3
+
     # Developer's Note: This code snippet below is to investigate the intermediate values used in Module III.
     #                   Do not remove this code part.
 
@@ -433,176 +653,5 @@ class ClimaticConstraints(object):
 
     #     return [self.latitude[i,j], self.elevation[i,j], self.months_P_gte_eto[i,j], self.min_T[i,j], test, B, C, D, E, fc3, adj_yld, mid_doy, B_row, C_row, D_row, E_row, lgp_agc]
 
-class ProcessExcelWrapper:
-
-    def __init__(self, filename_input, crop_name, crop_cycle_length, input_management, condition, output_path):
-        """
-        Initialization of ProcessExcelWrapper object class.
-
-        Args:
-            filename_input (str): Input file name directory
-            crop_name (str): Selected LUT crop name
-            crop_cycle_length (float/int): Reference cycle length of the selected LUT crop name
-            input_management (str): [Low, Medium or High]
-            condition (str): Rainfed ['rainfed','rain-fed','Rainfed','RainFed', 'RAINFED','r','R', 'rf','RF']
-                             Irrigated ['irrigated','Irrigated', 'IRRIGATED', 'I','ir']
-            output_path(str): folder directory to save the output excel sheet
-        Return:
-            None.    
-        """
-        self.filename_input=filename_input
-        self.crop_name=crop_name
-        self.crop_cycle_length=crop_cycle_length
-        self.input_management=input_management
-        self.condition=condition
-        self.data_dict={}
-        self.SHEET_NAMES=['A5-1.1','A5-1.2','A5-1.3','A5-1.4','A5-1.5']
-        try:
-            self.output_file_name= output_path+'/'+self.crop_name+'_'+self.input_management+'_'+self.condition+'_lst.xlsx'
-        except (TypeError, ValueError):
-            print ("Wrong operation filname cannot create!!")
-        
-    def read_input_file(self, sheet_name):
-        """
-        (Sub-function) Reading the selected sheet of GAEZ Appendix.
-        """
-        try:
-            self.Dframe=pd.read_excel(self.filename_input, header=0, sheet_name=sheet_name)
-        except IOError:
-            print("Could not open the file "+self.filename_input)
-
-    def process_data(self):
-        """
-        (Sub-function) Main function to compile all agro-climatic indicators based on user-defined.
-        settings.
-        """
-        try:
-            self.hDframe=self.Dframe.iloc[0:2].iloc[0,1]
-            if self.condition in ['rainfed','rain-fed','Rainfed','RainFed', 'RAINFED','r','R', 'rf','RF']:
-                condition='rain-fed'
-            elif self.condition in ['irrigated','Irrigated', 'IRRIGATED', 'I','ir']:
-                condition='irrigated'
-            self.bDframe=self.Dframe.iloc[3:]
-            self.bDframe.columns=self.Dframe.iloc[2]
-            self.cropgroups=self.bDframe.groupby('Common name')
-            if self.crop_name in self.cropgroups.groups.keys():
-                self.cropDframe=self.cropgroups.get_group(self.crop_name)
-            elif self.crop_name+' ' in self.cropgroups.groups.keys():
-                self.cropDframe=self.cropgroups.get_group(self.crop_name+' ') 
-            if ((self.hDframe.find(condition) > 0) and (self.hDframe.find('temperature < 10')>0 or self.hDframe.find('temperature > 20')>0)):
-                for i in range(0,self.cropDframe.shape[0]):
-                    if i%12==0:
-                        if self.cropDframe.iloc[i,2:5][1]=='+':
-                            if np.isnan(self.cropDframe.iloc[i,2:5][0])==False and np.isnan(self.cropDframe.iloc[i,2:5][0])==False:
-                                if int(self.cropDframe.iloc[i,2:5][0]+self.cropDframe.iloc[i,2:5][2])==self.crop_cycle_length:
-                                    self.InputlDframe=self.cropDframe[i:i+12].groupby('Input level').get_group(self.input_management).iloc[1:,6:].fillna(0)
-                                    self.InputlDframe1=self.InputlDframe.drop([0], axis=1)
-                                    processed=self.process_colemnnames(list(self.InputlDframe1.columns))
-                                    self.OutDFrame=self.InputlDframe1.rename(columns=processed, errors='raise')                 
-                            else:
-                                if self.cropDframe.iloc[i,2:5][2]==self.crop_cycle_length:
-                                    self.InputlDframe=self.cropDframe[i:i+12].groupby('Input level').get_group(self.input_management).iloc[1:,6:].fillna(0)
-                                    self.InputlDframe1=self.InputlDframe.drop([0], axis=1)
-                                    processed=self.process_colemnnames(list(self.InputlDframe1.columns))
-                                    self.OutDFrame=self.InputlDframe1.rename(columns=processed, errors='raise')
-                        elif np.isnan(self.cropDframe.iloc[i,2:5][0])==True and np.isnan(self.cropDframe.iloc[i,2:5][1])==True:
-                            if int(self.cropDframe.iloc[i,2:5][2])==self.crop_cycle_length:
-                                self.InputlDframe=self.cropDframe[i:i+12].groupby('Input level').get_group(self.input_management).iloc[1:,6:].fillna(0)
-                                self.InputlDframe1=self.InputlDframe.drop([0], axis=1)
-                                processed=self.process_colemnnames(list(self.InputlDframe1.columns))
-                                self.OutDFrame=self.InputlDframe1.rename(columns=processed, errors='raise')
-                        if self.hDframe.find('temperature < 10')>0:   
-                            self.data_dict.update({'mean < 10':self.OutDFrame})
-                        elif self.hDframe.find('temperature > 20')>0:
-                            self.data_dict.update({'mean > 20':self.OutDFrame})
-                        else:
-                            print('Error Data Not Found Invalid Data to write Dataframe')
-            elif self.hDframe.find('frost')>0:
-                    try:
-                        for i in range(0,self.cropDframe.shape[0]):
-                            if self.cropDframe.iloc[i,2:5][1]=='+':
-                                if np.isnan(self.cropDframe.iloc[i,2:5][0])==False and np.isnan(self.cropDframe.iloc[i,2:5][2])==False:
-                                    if int(self.cropDframe.iloc[i,2:5][0]+self.cropDframe.iloc[i,2:5][2])==self.crop_cycle_length:
-                                        self.InputlDframe=self.cropDframe[i:i+2].iloc[0:1,6:].fillna(0)
-                                        self.InputlDframe1=self.InputlDframe.drop([0], axis=1)
-                                        processed=self.process_colemnnames(list(self.InputlDframe1.columns))
-                                        self.OutDFrame=self.InputlDframe1.rename(columns=processed, errors='raise')
-                                        self.OutDFrame['type']='lgpt10'
-                                        self.OutDFrame['365,366']=0
-                                        self.data_dict.update({'lgpt10':self.OutDFrame})
-                                else:
-                                    if self.cropDframe.iloc[i,2:5][2]==self.crop_cycle_length:
-                                        if np.isnan(self.cropDframe.iloc[i,2:5][0])==True and np.isnan(self.cropDframe.iloc[i,2:5][1])==True:
-                                            self.InputlDframe=self.cropDframe[i:i+2].iloc[0:1,6:].fillna(0)
-                                            self.InputlDframe1=self.InputlDframe.drop([0], axis=1)
-                                            processed=self.process_colemnnames(list(self.InputlDframe1.columns))
-                                            self.OutDFrame=self.InputlDframe1.rename(columns=processed, errors='raise')
-                                            self.OutDFrame['type']='lgpt10'
-                                            self.OutDFrame['365,366']=0
-                                            self.data_dict.update({'lgpt10':self.OutDFrame})
-                            elif np.isnan(self.cropDframe.iloc[i,2:5][0])==True and np.isnan(self.cropDframe.iloc[i,2:5][1])==True:
-                                if int(self.cropDframe.iloc[i,2:5][2])==self.crop_cycle_length:
-                                    InputlDframe=self.cropDframe[i:i+1].iloc[0:1,6:].fillna(0)
-                                    self.InputlDframe1=InputlDframe.drop([0], axis=1)
-                                    processed=self.process_colemnnames(list(self.InputlDframe1.columns))
-                                    self.OutDFrame=self.InputlDframe1.rename(columns=processed, errors='raise')
-                                    self.OutDFrame['type']='lgpt10'
-                                    self.OutDFrame['365,366']=0
-                                    self.data_dict.update({'lgpt10':self.OutDFrame})
-                    except (KeyError,IndexError, ValueError, AttributeError):
-                        print(" Index or Key not found or wrong value in the input PLease check: ", self.crop_name, self.crop_cycle_length,self.input_management)
-        except (KeyError, IndexError):
-            print ("Index or Key not present in the dataframe")
-        
-    def process_colemnnames(self, columns:list):
-        """
-        (Sub-function) Output excel column settings.
-        """
-        processed={}
-        for val in columns:
-            x=val
-            val=val.strip("'")
-            if val=='Constraint type':
-                processed.update({x:'type'})
-            elif len(val.split('-'))==2 and val.split('-')[1].isnumeric()==True:
-                if val.split('-')[0]=='1':
-                    val="0-29"
-                    processed.update({x:val.replace('-',',')})
-                elif val.split('-')[0]=='330' and val.split('-')[1]=='365':
-                    val="330-364"
-                    processed.update({x:val.replace('-',',')})
-                else:
-                    processed.update({x:val.replace('-',',')})    
-            else:
-                processed.update({x:val})
-        return processed
-    
-    def write_excel(self):
-        """
-        (Sub-function) Convert the database dictionary to excel writer to export.
-        """
-        
-        try:
-            with pd.ExcelWriter(self.output_file_name) as writer:
-                for k in self.data_dict:
-                    self.data_dict[k].to_excel(writer, sheet_name=k, index=False)
-        except (IOError):
-            print("Not a valid Input/Output File")
-
-    def run(self):
-        """
-        Run the excel wrapper function to export out user-defined crop/LUT agro-climatic
-        constraints:
-        
-        Args:
-            None.
-        Return:
-            Excel sheet of agro-climatic constraint factors at the output path destination.
-        """
-        for s in self.SHEET_NAMES:
-            self.read_input_file(sheet_name=s)
-            self.process_data()
-            self.write_excel()
-        return self.output_file_name
     
 #----------------- End of file -------------------------#

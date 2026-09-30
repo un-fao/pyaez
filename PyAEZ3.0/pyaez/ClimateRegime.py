@@ -31,10 +31,10 @@ Version 4.0:
 
 import numpy as np
 
-from UtilitiesCalc import compute_chunk_size_multi, generateLatitudeMap, interpMonthlyToDaily, averageDailyToMonthly
-from ETOCalc import calculateETONumba, compute_Rn_chunk
-from LGPCalc import psh, RefWaterBalanceCalc, rainPeak, islgpt, val10day, search_cycles, process_chunk
-from ThermalScreening import getTempTrend, getSmoothTemp, getTemperatureGrowingPeriod
+from pyaez.UtilitiesCalc import compute_chunk_size_multi, generateLatitudeMap, interpMonthlyToDaily, averageDailyToMonthly
+from pyaez.ETOCalc import calculateETONumba, compute_Rn_chunk
+from pyaez.LGPCalc import psh, RefWaterBalanceCalc, rainPeak, islgpt, val10day, search_cycles, process_chunk
+from pyaez.ThermalScreening import getTempTrend, getSmoothTemp, getTemperatureGrowingPeriod
 from typing import List, Tuple
 import psutil
 

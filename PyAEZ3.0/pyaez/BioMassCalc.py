@@ -32,6 +32,102 @@ np.round_ = np.round
 # This routine will be included in the session because it produces very close values as scipy cubic spline. And 
 # with Numba enhancement, the execution is quite faster from 0.0229s to 0.00299s (10 times faster)
 
+def Pmval(dT_mean, adaptability_class):
+    """
+    Exact port of GAEZ BIO.FOR Pmval()
+
+    adaptability_class = AD field from PAR.BI (1..28)
+
+    Historical interpretation:
+
+        I   = cool C3
+        II  = warm C3
+        III = warm C4
+        IV  = cool C4
+
+    Later GAEZ versions expanded these into 28 crop-specific
+    photosynthetic response classes.
+
+    Examples:
+        1-3   C3 I cryophilic
+        4-6   C3 II thermophilic
+        7     C3 I/II
+        8     C4 III thermophilic
+        9     C4 IV cryophilic
+        10-11 vegetables
+        12-14 beverages
+        ...
+        28    date palm
+    """
+
+    temp_axis = np.array(
+        [-5., 0., 5., 10., 15., 20.,
+         25., 30., 35., 40., 45., 50.]
+    )
+
+    PmTable = np.array([
+
+        # 1-3  C3 I cryophilic
+        [0.,0.,5.,15.,20.,20.,15.,5.,0.,0.,0.,0.],
+        [0.,0.,5.,15.,25.,25.,20.,10.,0.,0.,0.,0.],
+        [0.,0.,5.,15.,25.,25.,20.,15.,5.,0.,0.,0.],
+
+        # 4-6  C3 II thermophilic
+        [0.,0.,0.,0.,15.,30.,35.,35.,30.,5.,0.,0.],
+        [0.,0.,0.,0.,15.,30.,35.,35.,30.,5.,0.,0.],
+        [0.,0.,0.,5.,15.,30.,35.,35.,30.,5.,0.,0.],
+
+        # 7  C3 I/II thermophilic
+        [0.,0.,5.,15.,20.,25.,30.,30.,25.,5.,0.,0.],
+
+        # 8  C4 III thermophilic
+        [0.,0.,0.,0.,5.,45.,65.,65.,65.,45.,5.,0.],
+
+        # 9  C4 IV cryophilic
+        [0.,0.,0.,5.,25.,40.,50.,50.,40.,5.,0.,0.],
+
+        # 10-11 vegetables
+        [0.,0.,0.,10.,20.,25.,20.,10.,5.,0.,0.,0.],
+        [0.,0.,5.,15.,20.,25.,20.,10.,0.,0.,0.,0.],
+
+        # 12-14 beverages
+        [0.,0.,0.,0.,15.,20.,30.,30.,20.,5.,0.,0.],
+        [0.,0.,0.,10.,20.,25.,25.,10.,5.,0.,0.,0.],
+        [0.,0.,0.,0.,15.,30.,35.,35.,30.,5.,0.,0.],
+
+        # 15 switchgrass
+        [0.,0.,0.,15.,45.,65.,65.,50.,25.,5.,0.,0.],
+
+        # 16-20 grasses and legumes
+        [0.,0.,2.5,10.,20.,25.,25.,20.,10.,5.,0.,0.],
+        [0.,0.,5.,15.,20.,20.,15.,5.,0.,0.,0.,0.],
+        [0.,0.,0.,2.5,15.,35.,35.,35.,30.,5.,0.,0.],
+        [0.,0.,2.5,15.,37.5,50.,50.,37.5,25.,10.,0.,0.],
+        [0.,0.,0.,2.5,30.,40.,47.5,50.,47.5,40.,5.,0.],
+
+        # 21-22 cocoa
+        [0.,0.,0.,0.,9.,18.,27.,27.,18.,5.,0.,0.],
+        [0.,0.,0.,0.,15.,30.,35.,35.,30.,5.,0.,0.],
+
+        # 23-24 miscanthus and C4 III
+        [0.,0.,5.,15.,45.,65.,65.,65.,45.,5.,0.,0.],
+        [0.,0.,0.,5.,15.,45.,65.,65.,65.,45.,5.,0.],
+
+        # 25 temperate alfalfa
+        [0.,0.,5.,15.,25.,30.,35.,30.,25.,5.,0.,0.],
+
+        # 26-27 energy cane
+        [0.,0.,0.,5.,25.,55.,65.,65.,65.,45.,5.,0.],
+        [0.,0.,0.,5.,25.,55.,65.,65.,65.,45.,5.,0.],
+
+        # 28 date palm
+        [0.,0.,0.,0.,15.,30.,35.,35.,35.,30.,15.,5.]
+    ])
+
+    row = PmTable[int(adaptability_class) - 1]
+
+    return np.interp(dT_mean, temp_axis, row)
+    
 def calculateBiomassNumba(cycle_begin:int, cycle_end:int, cycle_len:int, latitude:float,
                          shortRad_daily, meanT_daily, minT_daily, maxT_daily,
                         LAi:float, legume:int, adaptability:int, leap_year:bool):
@@ -112,14 +208,6 @@ def calculateBiomassNumba(cycle_begin:int, cycle_end:int, cycle_len:int, latitud
                     [0, 16, 74,158,241,291,273,200,112, 38,  1,  0],# 70 deg N
                     [0,  0, 24,133,257,318,297,196, 69,  2,  0,  0],# 80 deg N
                     [0,  0,  0,131,269,319,302,215, 35,  0,  0,  0]])# 90 deg N
-
-    """Pm values """
-    PmIndexExtDtTemp = np.array([5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0]);
-
-    PmIndexExt = np.array([[0.0, 15.0, 20.0, 20.0, 15.0, 5.0, 0.0],
-                            [0.0, 0.0, 15.0, 32.5, 35.0, 35.0, 35.0],
-                            [0.0, 0.0, 5.0, 45.0, 65.0, 65.0, 65.0],
-                            [0.0, 5.0, 45.0, 65.0, 65.0, 65.0, 65.0]]);
     
     """Growth rate multiplier table"""
     LAI_table = np.array([1., 2., 3., 4., 5., 6., 7., 8.])
@@ -173,10 +261,8 @@ def calculateBiomassNumba(cycle_begin:int, cycle_end:int, cycle_len:int, latitud
     '''the Fraction of the Daytime the Sky is Clouded'''
     f_day_clouded = (Ac_mean - (0.5 * Rg))/(0.8 * (Ac_mean));
 
-    '''Maximum net Rate of CO 2 Exchange of Leaves'''
-
-    PmIndexExt_1Row = PmIndexExt[adaptability-1,:];
-    iPm = np.interp(dT_mean,PmIndexExtDtTemp,PmIndexExt_1Row);
+    ''' Exact GAEZ Pmval() reproduction - adaptability = AD field from PAR.BI (1..28)'''
+    iPm = Pmval(dT_mean, adaptability)
 
     '''Adjust for Temperature and LAI'''
     # Calculate Ct (Correct)
@@ -203,7 +289,27 @@ def calculateBiomassNumba(cycle_begin:int, cycle_end:int, cycle_len:int, latitud
         bgm = (f_day_clouded*bo_mean) + ((1 - f_day_clouded)*bc_mean);
 
     '''net biomass production '''
-    Bn = (0.36 * bgm * l)/((1/cycle_len)+0.25*Ct)
+    # Fortran implementation in BIO.f, module 2
+    #cbna  = 0.50
+    #kresp = 0.28
+    #
+    #bna = cbna * bgm * SLAI
+    #
+    #Bn = (1-kresp) * bna * cgc /
+    #     (1000 + 250*cgc*ct)
+
+    cbna = 0.50
+    kresp = 0.28
+    cgc = cycle_len
+    
+    bna = cbna * bgm * l
+    
+    Bn = (
+        (1.0 - kresp)
+        * bna
+        * cgc
+        / (1000.0 + 250.0 * cgc * Ct)
+    )
 
     return Bn
 
@@ -531,5 +637,3 @@ def calculateBiomassNumbaIntermediates(cycle_begin:int, cycle_end:int, cycle_len
     Bn = (0.36 * bgm * l)/((1/cycle_len)+0.25*Ct)
 
     return Bn , Ac_mean, bc_mean, bo_mean, meanT_mean, dT_mean, Rg, f_day_clouded, iPm, Ct, l, bgm, Bn, Ac_interp, Bc_interp, Bo_interp
-
-
