@@ -14,3 +14,21 @@ __pycache__/
 # Operating-system files
 .DS_Store
 Thumbs.db
+
+data_input/
+*.shp
+*.dbf
+*.shx
+*.prj
+*.cpg
+
+# Python packaging
+build/
+dist/
+*.egg-info/
+
+# Python cache
+__pycache__/
+*.pyc
+
+CAVA_data/

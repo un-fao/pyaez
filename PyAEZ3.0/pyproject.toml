@@ -1,0 +1,102 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyaez"
+version = "3.0.0"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+description = "PyAEZ: Agro-Ecological Zoning tools for climate, soil, terrain and crop suitability assessment"
+readme = "README.md"
+requires-python = ">=3.9"
+
+authors = [
+    { name = "Geospatial Unit, FAO Land and Water Division" }
+]
+
+maintainers = [
+    { name = "Geospatial Unit, FAO Land and Water Division" }
+]
+
+license = { text = "MIT" }
+
+keywords = [
+    "agriculture",
+    "agroecological zoning",
+    "aez",
+    "climate",
+    "food security",
+    "crop suitability",
+    "gis",
+    "geospatial",
+    "land resources",
+    "soil",
+    "water",
+    "fao"
+]
+
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+    "Topic :: Software Development :: Libraries :: Python Modules"
+]
+
+dependencies = [
+	"cavapy>=2.1.3",
+    "gdal>=3.10",
+    "geopandas>=1.1",
+    "ipywidgets>=8.1.8",
+    "matplotlib>=3.10",
+    "numba>=0.64.0",
+    "numpy>=2.4",
+    "pandas>=3.0",
+    "psutil>=7.2.2",
+    "python-Levenshtein>=0.27",
+    "rasterio>=1.4.4",
+    "scipy>=1.17",
+    "shapely>=2.1.2",
+    "xarray>=2026.2.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/FAO-GIS/pyaez"
+Repository = "https://github.com/FAO-GIS/pyaez"
+Issues = "https://github.com/FAO-GIS/pyaez/issues"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pyaez*"]
+exclude = ["data_input*",
+		   "data_output*",
+		   "docs*",
+		   "module0*",
+		   "module1*",
+		   "module2*",
+		   "module3*",
+		   "module4*",
+		   "module5*",
+		   "site*",
+		   "tutorials*",
+		   "utilities*"
+		  ]
+

@@ -1,0 +1,27 @@
+graft data_input/DEM
+graft data_input/LULC
+include data_input/UN_world_shapefile/BNDA_A0.shp
+include data_input/UN_world_shapefile/BNDA_A0.shx
+include data_input/UN_world_shapefile/BNDA_A0.dbf
+include data_input/UN_world_shapefile/BNDA_A0.prj
+include data_input/UN_world_shapefile/BNDA_A0.cpg
+include data_input/UN_world_shapefile/BNDA_A0.sbn
+include data_input/UN_world_shapefile/BNDA_A0.sbx
+
+include data_input/input_crop_TSUM_parameters_HI.xlsx
+include data_input/crop-specific_rule.xlsx
+
+prune data_output
+prune docs
+prune module0
+prune module1
+prune module2
+prune module3
+prune module4
+prune module5
+prune site
+prune tutorials
+prune utilities
+
+global-exclude __pycache__
+global-exclude *.pyc
