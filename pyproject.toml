@@ -77,8 +77,11 @@ Issues = "https://github.com/FAO-GIS/pyaez/issues"
 [tool.setuptools]
 include-package-data = true
 
+[tool.setuptools.package-dir]
+"" = "PyAEZ3.0"
+
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["PyAEZ3.0"]
 include = ["pyaez*"]
 exclude = ["data_input*",
 		   "data_output*",
