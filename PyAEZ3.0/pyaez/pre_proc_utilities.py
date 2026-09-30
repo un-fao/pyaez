@@ -105,7 +105,7 @@ def get_UN_country(country_name, thr=3, return_gdf=False):
     """
     
     # Path to the UN shapefile
-    UN_maps = r'data_input/UN_world_shapefile/BNDA_A1.shp'
+    UN_maps = r'data_input/UN_world_shapefile/BNDA_A0.shp'
     
     # Read the shapefile into a GeoDataFrame
     gdf = gpd.read_file(UN_maps)
@@ -148,7 +148,7 @@ def get_UN_country(country_name, thr=3, return_gdf=False):
 
 '''    
 def choose_country(thr=3, return_gdf=False):
-    UN_maps = r'data_input/UN_world_shapefile/BNDA_A1.shp'
+    UN_maps = r'data_input/UN_world_shapefile/BNDA_A0.shp'
     gdf = gpd.read_file(UN_maps)
 
     country_list = sorted(gdf['romnam'].dropna().unique())
@@ -185,7 +185,7 @@ def choose_country(thr=3, return_gdf=False):
     from tkinter import ttk, messagebox
     import geopandas as gpd
 
-    UN_maps = r'data_input/UN_world_shapefile/BNDA_A1.shp'
+    UN_maps = r'data_input/UN_world_shapefile/BNDA_A0.shp'
     gdf = gpd.read_file(UN_maps)
 
     country_list = sorted(gdf['romnam'].dropna().unique())
