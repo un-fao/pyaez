@@ -859,7 +859,12 @@ def get_agro_climatic_constraints_array_full_appendices_M3(
         numeric_cols = df.columns[1:]   # everything except 'type'
         df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors='coerce').fillna(0).astype('int64')
 
-    with pd.HDFStore(f"./data_input/input_module3/M3_constraints_{crop_name}_{input_level}_{condition_type}.h5") as store:
+    output_dir = Path("./data_input/input_module3")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    output_file = output_dir / f"M3_constraints_{crop_name}_{input_level}_{condition_type}.h5"
+
+    with pd.HDFStore(output_file) as store:
         for key, df in results.items():
             store.put(key, df, format="fixed")
         

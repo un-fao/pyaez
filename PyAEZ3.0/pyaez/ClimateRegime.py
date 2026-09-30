@@ -2004,7 +2004,7 @@ class ClimateRegime(object):
                     mask = np.ones((r1 - r0, c1 - c0), dtype=np.bool)
 
 
-                monthly = averageDailyToMonthly(chunk, leap_year)
+                monthly = averageDailyToMonthly(chunk, self.leap_year)
                 tadif0 = np.nanmax(monthly, axis=2) - np.nanmin(monthly, axis=2)
 
                 cond1 = (tadif0 < 35) & (tadif0 > 20) & mask
@@ -2084,7 +2084,7 @@ class ClimateRegime(object):
                 else:
                     mask = np.ones((r1 - r0, c1 - c0), dtype=np.bool)
 
-                monthly = averageDailyToMonthly(chunk, leap_year)
+                monthly = averageDailyToMonthly(chunk, self.leap_year)
                 tadif0 = np.nanmax(monthly, axis=2) - np.nanmin(monthly, axis=2)
 
                 cond1 = (tadif0 < 35) & (tadif0 > 20) & mask
