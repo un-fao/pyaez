@@ -1,4 +1,6 @@
-*.tif filter=lfs diff=lfs merge=lfs -text
+PyAEZ3.0/data_input/*.tif filter=lfs diff=lfs merge=lfs -text
+PyAEZ3.0/data_input/**/*.tif filter=lfs diff=lfs merge=lfs -text
+PyAEZ3.0/example_input_data.7z filter=lfs diff=lfs merge=lfs -text
 *.pkl filter=lfs diff=lfs merge=lfs -text
 # Binary scientific and geospatial files
 *.shp -text
@@ -12,4 +14,4 @@
 *.xls -text
 *.pdf -text
 *.png -text
-*.7z filter=lfs diff=lfs merge=lfs -text
+PyAEZ3.0/data_output/

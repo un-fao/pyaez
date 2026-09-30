@@ -32,3 +32,5 @@ __pycache__/
 *.pyc
 
 CAVA_data/
+PyAEZ3.0/data_output/
+data_output/
