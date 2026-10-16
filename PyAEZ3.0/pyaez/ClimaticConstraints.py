@@ -396,130 +396,222 @@ class ClimaticConstraints(object):
             self,
             condition_type: str,
             yield_map: np.ndarray = None,
+            lgp: np.ndarray = None,
+            lgpt10: np.ndarray = None,
+            lgp_equv: np.ndarray = None,
             plot_results: bool = False
         ):
         """
-        Compute climate-adjusted yield and reduction factor for rainfed or irrigated
-        conditions, selecting the correct climatic constraints for the specified crop
-        and management level.
+        Compute climate-adjusted yield and climatic reduction factors for rainfed
+        or irrigated production systems.
 
-        This function:
+        This function applies the Module 3 agro-climatic constraints to a yield
+        raster and computes:
 
-          - Uses either a user-provided yield map or loads the baseline yield raster
-            (NB2) corresponding to the requested production condition,
-          - Loads agro-climatic indicators (LGP, LGPT10, LGPEquivalent) from NB1,
-          - Applies climatic reduction factors and constraints via Module 3,
-          - Computes the climate-adjusted yield,
-          - Returns both the adjusted yield and the overall climatic reduction factor (Fc3),
-          - Optionally plots the original yield, constrained yield and Fc3.
+        - the climate-adjusted yield,
+        - the overall climatic reduction factor (Fc3).
+
+        The function supports both file-based and in-memory workflows:
+
+        - File-based mode (default):
+          yield and climatic indicators are loaded automatically from NB1/NB2 outputs.
+        - In-memory mode:
+          yield and/or climatic indicators can be supplied directly as NumPy arrays,
+          avoiding additional disk I/O.
 
         Parameters
         ----------
         self : pyaez.ClimaticConstraints.ClimaticConstraints
             Configured climatic constraints object. Must provide:
-            `crop_name`, `country_name`, `year`, `input_level`
-            and the methods:
 
-            * `setReductionFactors_fromM0()`
-            * `applyClimaticConstraints()`
-            * `getClimateAdjustedYield()`
-            * `getClimateReductionFactor()`
+            Attributes
+            ----------
+            crop_name : str
+            country_name : str
+            year : int
+            input_level : str
+
+            Methods
+            -------
+            setReductionFactors_fromM0()
+            applyClimaticConstraints()
+            getClimateAdjustedYield()
+            getClimateReductionFactor()
 
         condition_type : {'rainfed', 'irrigated'}
-            Production condition for which climatic constraints are applied.
-            When `yield_map` is not provided, this parameter determines which
-            baseline yield raster is loaded from NB2.
+            Production system to evaluate.
+
+            Determines:
+
+            - which climatic constraint parameters are applied,
+            - which NB2 yield raster is loaded when `yield_map=None`.
 
         yield_map : numpy.ndarray, optional
             Yield raster to which climatic constraints will be applied.
 
-            If provided, the function uses this array directly and does not
-            load any yield raster from disk.
+            If provided, the array is used directly.
 
             If None (default), the function loads the corresponding NB2 raster:
 
-            * rainfed   → `{country}_{crop}_yld_rain_{year}.tif`
-            * irrigated → `{country}_{crop}_yld_irr_{year}.tif`
+            - rainfed:
+              `{country_name}_{crop_name}_yld_rain_{year}.tif`
+            - irrigated:
+              `{country_name}_{crop_name}_yld_irr_{year}.tif`
+
+        lgp : numpy.ndarray, optional
+            Length of Growing Period (LGP) raster.
+
+            If provided together with `lgpt10` and `lgp_equv`,
+            the supplied arrays are used directly.
+
+            If None, the raster is loaded from:
+
+            `{country_name}_LGP_{year}.tif`
+
+        lgpt10 : numpy.ndarray, optional
+            Temperature-adjusted Length of Growing Period raster.
+
+            If None, the raster is loaded from:
+
+            `{country_name}_LGPt10_{year}.tif`
+
+        lgp_equv : numpy.ndarray, optional
+            Equivalent Length of Growing Period raster.
+
+            If None, the raster is loaded from:
+
+            `{country_name}_LGPEquivalent_{year}.tif`
 
         plot_results : bool, optional
-            If True, displays:
+            If True, display:
 
-            * input yield map,
-            * climate-adjusted yield,
-            * climatic reduction factor (Fc3).
+            - original yield raster,
+            - climate-adjusted yield raster,
+            - reduction factor Fc3.
 
         Returns
         -------
         clim_yield : numpy.ndarray
-            Climate-constrained yield map with the same dimensions as
-            the input yield raster.
+            Climate-adjusted yield raster.
+
+            Same dimensions as the input yield map.
 
         fc3 : numpy.ndarray
-            Overall climatic reduction factor (Fc3).
+            Climatic reduction factor.
+
+            Values typically range from 0 to 1.
 
         Notes
         -----
-        **Yield source**
+        Yield source
+        ~~~~~~~~~~~~
 
-        Two execution modes are supported:
+        Two yield-input modes are supported:
 
-        1. File-based mode (default)
+        1. File-based mode
 
-           The baseline yield is loaded automatically from NB2.
+           The baseline yield raster is loaded automatically from NB2.
 
         2. In-memory mode
 
-           A yield raster already available in memory is passed through
-           the `yield_map` argument.
+           A precomputed yield raster is supplied through `yield_map`.
 
-           Example:
+        Climatic indicator source
+        ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-           >>> clim_yield, fc3 = clim.compute_yield(
+        Two climatic-indicator modes are supported:
+
+        1. File-based mode
+
+           LGP, LGPt10 and LGPEquivalent are loaded automatically
+           from NB1 outputs.
+
+        2. In-memory mode
+
+           The three indicators are provided as NumPy arrays:
+
+           >>> clim.compute_yield(
            ...     condition_type="rainfed",
-           ...     yield_map=my_yield_array
+           ...     yield_map=yld,
+           ...     lgp=lgp,
+           ...     lgpt10=lgpt10,
+           ...     lgp_equv=lgp_equv
            ... )
 
-        **File dependencies**
+        All three climatic indicators must either:
 
-        NB1 climatic indicators:
+        - all be provided, or
+        - all be omitted.
 
-        * `{country_name}_LGP_{year}.tif`
-        * `{country_name}_LGPt10_{year}.tif`
-        * `{country_name}_LGPEquivalent_{year}.tif`
+        Mixed configurations are not allowed.
 
-        NB2 baseline yields (only if `yield_map=None`):
+        File dependencies
+        ~~~~~~~~~~~~~~~~~
 
-        * `{country_name}_{crop_name}_yld_rain_{year}.tif`
-        * `{country_name}_{crop_name}_yld_irr_{year}.tif`
+        NB2 yield rasters (only if `yield_map=None`):
 
-        All rasters are expected to be co-registered
-        (same extent, CRS and resolution).
+        - `{country_name}_{crop_name}_yld_rain_{year}.tif`
+        - `{country_name}_{crop_name}_yld_irr_{year}.tif`
+
+        NB1 climatic indicators (only if indicators are not provided):
+
+        - `{country_name}_LGP_{year}.tif`
+        - `{country_name}_LGPt10_{year}.tif`
+        - `{country_name}_LGPEquivalent_{year}.tif`
+
+        Array requirements
+        ~~~~~~~~~~~~~~~~~~
+
+        The following arrays must have identical dimensions:
+
+        - yield_map
+        - lgp
+        - lgpt10
+        - lgp_equv
+
+        All rasters are expected to be co-registered and represent the same
+        spatial domain.
 
         Raises
         ------
         ValueError
-            If `condition_type` is not one of
-            {'rainfed', 'irrigated'}.
+            If `condition_type` is invalid.
+
+        ValueError
+            If only some of the climatic indicators are provided.
+
+        ValueError
+            If input arrays do not share the same dimensions.
 
         TypeError
-            If a provided `yield_map` is not a NumPy array.
+            If a supplied raster is not array-like.
 
         FileNotFoundError
-            If required NB1/NB2 rasters cannot be opened.
+            If required NB1/NB2 files cannot be opened.
 
         Examples
         --------
-        Load baseline yield from NB2:
+        Load everything from NB1/NB2:
 
         >>> clim_yield, fc3 = clim.compute_yield(
         ...     condition_type="rainfed"
         ... )
 
-        Use a yield map already in memory:
+        Use a custom yield raster:
 
         >>> clim_yield, fc3 = clim.compute_yield(
         ...     condition_type="rainfed",
-        ...     yield_map=yld_rain
+        ...     yield_map=my_yield
+        ... )
+
+        Run fully in memory:
+
+        >>> clim_yield, fc3 = clim.compute_yield(
+        ...     condition_type="rainfed",
+        ...     yield_map=my_yield,
+        ...     lgp=my_lgp,
+        ...     lgpt10=my_lgpt10,
+        ...     lgp_equv=my_lgp_equv
         ... )
         """
         
@@ -579,11 +671,76 @@ class ClimaticConstraints(object):
 
             yield_map = ds.ReadAsArray()
             
-        # Load agro-climatic indicators
-        lgp = gdal.Open(os.path.join(work_dir, f'data_output/NB1/{country_name}_LGP_{year}.tif')).ReadAsArray()
-        lgp10 = gdal.Open(os.path.join(work_dir, f'data_output/NB1/{country_name}_LGPt10_{year}.tif')).ReadAsArray()
-        lgp_equv = gdal.Open(os.path.join(work_dir, f'data_output/NB1/{country_name}_LGPEquivalent_{year}.tif')).ReadAsArray()
+        # ------------------------------------------------------------------
+        # Agro-climatic indicators handling
+        # ------------------------------------------------------------------
 
+        indicators_supplied = (
+            lgp is not None and
+            lgpt10 is not None and
+            lgp_equv is not None
+        )
+
+        indicators_missing = (
+            lgp is None or
+            lgpt10 is None or
+            lgp_equv is None
+        )
+
+        # Either all indicators must be supplied or none
+        if indicators_supplied:
+
+            lgp = np.asarray(lgp)
+            lgpt10 = np.asarray(lgpt10)
+            lgp_equv = np.asarray(lgp_equv)
+
+        elif indicators_missing:
+
+            # Backward-compatible behaviour:
+            # read indicators from NB1 files
+
+            lgp_path = os.path.join(
+                work_dir,
+                f"data_output/NB1/{country_name}_LGP_{year}.tif"
+            )
+
+            lgpt10_path = os.path.join(
+                work_dir,
+                f"data_output/NB1/{country_name}_LGPt10_{year}.tif"
+            )
+
+            lgp_equv_path = os.path.join(
+                work_dir,
+                f"data_output/NB1/{country_name}_LGPEquivalent_{year}.tif"
+            )
+
+            ds = gdal.Open(lgp_path)
+            if ds is None:
+                raise FileNotFoundError(
+                    f"Could not open LGP raster: {lgp_path}"
+                )
+            lgp = ds.ReadAsArray()
+
+            ds = gdal.Open(lgpt10_path)
+            if ds is None:
+                raise FileNotFoundError(
+                    f"Could not open LGPt10 raster: {lgpt10_path}"
+                )
+            lgpt10 = ds.ReadAsArray()
+
+            ds = gdal.Open(lgp_equv_path)
+            if ds is None:
+                raise FileNotFoundError(
+                    f"Could not open LGPEquivalent raster: {lgp_equv_path}"
+                )
+            lgp_equv = ds.ReadAsArray()
+
+        else:
+
+            raise ValueError(
+                "Either provide all three climatic indicators "
+                "(lgp, lgpt10, lgp_equv) or none of them."
+            )
         
         self.applyClimaticConstraints(
             yield_input=yield_map,
