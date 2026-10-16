@@ -395,111 +395,190 @@ class ClimaticConstraints(object):
     def compute_yield(
             self,
             condition_type: str,
+            yield_map: np.ndarray = None,
             plot_results: bool = False
         ):
         """
         Compute climate-adjusted yield and reduction factor for rainfed or irrigated
-        conditions, selecting the correct parameter file based on the crop name and
-        management level (HI/LI).
-    
+        conditions, selecting the correct climatic constraints for the specified crop
+        and management level.
+
         This function:
-          - Loads the baseline yield raster (NB2) for the requested condition,
+
+          - Uses either a user-provided yield map or loads the baseline yield raster
+            (NB2) corresponding to the requested production condition,
           - Loads agro-climatic indicators (LGP, LGPT10, LGPEquivalent) from NB1,
-          - Selects the appropriate parameter workbook (Module 3) by `crop_name` and `management`,
-          - Applies climatic reduction factors and constraints via `clim_con`,
-          - Returns the climate-adjusted yield and the overall reduction factor (Fc3),
-          - Optionally plots original yield, constrained yield, and Fc3.
-    
+          - Applies climatic reduction factors and constraints via Module 3,
+          - Computes the climate-adjusted yield,
+          - Returns both the adjusted yield and the overall climatic reduction factor (Fc3),
+          - Optionally plots the original yield, constrained yield and Fc3.
+
         Parameters
         ----------
         self : pyaez.ClimaticConstraints.ClimaticConstraints
             Configured climatic constraints object. Must provide:
-            `crop_name` attribute and methods:
-            `setReductionFactors(file_path)`,
-            `applyClimaticConstraints(...)`,
-            `getClimateAdjustedYield()`,
-            `getClimateReductionFactor()`.
+            `crop_name`, `country_name`, `year`, `input_level`
+            and the methods:
+
+            * `setReductionFactors_fromM0()`
+            * `applyClimaticConstraints()`
+            * `getClimateAdjustedYield()`
+            * `getClimateReductionFactor()`
+
         condition_type : {'rainfed', 'irrigated'}
-            Production condition to compute. Determines which baseline yield raster
-            is loaded (NB2: `yld_rain` vs `yld_irr`) and which parameter file is used.
-        country_name : str
-            Country/study-area identifier used in NB1/NB2 filenames.
-        year : int or str
-            Year used in NB1/NB2 filenames. Accepts either `int` (e.g., 1990) or `str` (e.g., "1990").
-        management : {'HI','LI'}, optional
-            Parameter set selection:
-            - 'HI' → High-input workbooks (Module 3),
-            - 'LI' → Low-input workbooks (Module 3).
-            Raises `NameError` if not one of {'HI','LI'}.
+            Production condition for which climatic constraints are applied.
+            When `yield_map` is not provided, this parameter determines which
+            baseline yield raster is loaded from NB2.
+
+        yield_map : numpy.ndarray, optional
+            Yield raster to which climatic constraints will be applied.
+
+            If provided, the function uses this array directly and does not
+            load any yield raster from disk.
+
+            If None (default), the function loads the corresponding NB2 raster:
+
+            * rainfed   → `{country}_{crop}_yld_rain_{year}.tif`
+            * irrigated → `{country}_{crop}_yld_irr_{year}.tif`
+
         plot_results : bool, optional
-            If True, displays three plots (original yield, climate-adjusted yield, Fc3).
-    
+            If True, displays:
+
+            * input yield map,
+            * climate-adjusted yield,
+            * climatic reduction factor (Fc3).
+
         Returns
         -------
         clim_yield : numpy.ndarray
-            Climate-constrained yield map (same shape as input yield).
+            Climate-constrained yield map with the same dimensions as
+            the input yield raster.
+
         fc3 : numpy.ndarray
-            Overall climatic reduction factor (Fc3), values typically in [0, 1].
-    
+            Overall climatic reduction factor (Fc3).
+
         Notes
         -----
-        - **File dependencies**:
-            * NB2 baseline yield rasters in `data_output/NB2`:
-              `{country_name}_{crop_name}_yld_rain_{year}.tif` or `{country_name}_{crop_name}_yld_irr_{year}.tif`
-            * NB1 agro-climatic indicators in `data_output/NB1`:
-              `{country_name}_LGP_{year}.tif`,
-              `{country_name}_LGPt10_{year}.tif`,
-              `{country_name}_LGPEquivalent_{year}.tif`
-            * Module 3 parameter workbooks in `data_input/input_module3/`:
-              crop-specific `.xlsx` files (HI or LI set)
-        - **Crop name normalization**: The function derives `crop_key` from `self.crop_name`
-          by dropping trailing `_H` or `_L` and lowercasing (e.g., `"Maize_HI"` → `"maize"`).
-        - **Array shapes**: All rasters are expected to be co-registered (same extent/resolution/CRS).
-        - **Plotting**: Uses Matplotlib; `vmax` is set to the maximum of original vs. constrained yield.
-    
+        **Yield source**
+
+        Two execution modes are supported:
+
+        1. File-based mode (default)
+
+           The baseline yield is loaded automatically from NB2.
+
+        2. In-memory mode
+
+           A yield raster already available in memory is passed through
+           the `yield_map` argument.
+
+           Example:
+
+           >>> clim_yield, fc3 = clim.compute_yield(
+           ...     condition_type="rainfed",
+           ...     yield_map=my_yield_array
+           ... )
+
+        **File dependencies**
+
+        NB1 climatic indicators:
+
+        * `{country_name}_LGP_{year}.tif`
+        * `{country_name}_LGPt10_{year}.tif`
+        * `{country_name}_LGPEquivalent_{year}.tif`
+
+        NB2 baseline yields (only if `yield_map=None`):
+
+        * `{country_name}_{crop_name}_yld_rain_{year}.tif`
+        * `{country_name}_{crop_name}_yld_irr_{year}.tif`
+
+        All rasters are expected to be co-registered
+        (same extent, CRS and resolution).
+
         Raises
         ------
         ValueError
-            If `condition_type` is not one of {'rainfed','irrigated'} or if `crop_key` is unsupported.
-        NameError
-            If `management` is neither 'HI' nor 'LI'.
-        FileNotFoundError / OSError
-            If any of the required rasters or parameter files cannot be opened.
-    
+            If `condition_type` is not one of
+            {'rainfed', 'irrigated'}.
+
+        TypeError
+            If a provided `yield_map` is not a NumPy array.
+
+        FileNotFoundError
+            If required NB1/NB2 rasters cannot be opened.
+
         Examples
         --------
-        >>> clim_yield, fc3 = compute_yield(
-        ...     self,
-        ...     condition_type='rainfed',
-        ...     country_name='Ghana',
-        ...     year=1990,
-        ...     management='HI',
-        ...     plot_results=True
+        Load baseline yield from NB2:
+
+        >>> clim_yield, fc3 = clim.compute_yield(
+        ...     condition_type="rainfed"
         ... )
-        >>> clim_yield.shape, fc3.min(), fc3.max()
-           ((rows, cols), 0.0, 1.0)
+
+        Use a yield map already in memory:
+
+        >>> clim_yield, fc3 = clim.compute_yield(
+        ...     condition_type="rainfed",
+        ...     yield_map=yld_rain
+        ... )
         """
         
         crop_name = self.crop_name
         country_name = self.country_name
         year = self.year
         management = self.input_level
+
         # Set working directory
-        work_dir=os.getcwd()
-    
+        work_dir = os.getcwd()
+
         # Validate condition type
         if condition_type not in ["rainfed", "irrigated"]:
-            raise ValueError("condition_type must be 'rainfed' or 'irrigated'")
-    
+            raise ValueError(
+                "condition_type must be 'rainfed' or 'irrigated'"
+            )
+
         # Apply reduction factors and constraints
         self.setReductionFactors_fromM0(condition_type)
 
-        # Load yield map
-        if condition_type == "rainfed":
-            yield_map = gdal.Open(os.path.join(work_dir,f'data_output/NB2/{country_name}_{crop_name}_yld_rain_{year}.tif')).ReadAsArray()
-        else:
-            yield_map = gdal.Open(os.path.join(work_dir,f'data_output/NB2/{country_name}_{crop_name}_yld_irr_{year}.tif')).ReadAsArray()
+        # ------------------------------------------------------------------
+        # Yield map handling
+        # ------------------------------------------------------------------
+        if yield_map is not None:
 
+            # User supplied yield map
+            if not isinstance(yield_map, np.ndarray):
+                raise TypeError(
+                    "yield_map must be a numpy array"
+                )
+
+        else:
+
+            # Backward-compatible behaviour:
+            # read yield map from NB2 files
+
+            if condition_type == "rainfed":
+
+                yld_path = os.path.join(
+                    work_dir,
+                    f"data_output/NB2/{country_name}_{crop_name}_yld_rain_{year}.tif"
+                )
+
+            else:
+
+                yld_path = os.path.join(
+                    work_dir,
+                    f"data_output/NB2/{country_name}_{crop_name}_yld_irr_{year}.tif"
+                )
+
+            ds = gdal.Open(yld_path)
+
+            if ds is None:
+                raise FileNotFoundError(
+                    f"Could not open yield raster: {yld_path}"
+                )
+
+            yield_map = ds.ReadAsArray()
+            
         # Load agro-climatic indicators
         lgp = gdal.Open(os.path.join(work_dir, f'data_output/NB1/{country_name}_LGP_{year}.tif')).ReadAsArray()
         lgp10 = gdal.Open(os.path.join(work_dir, f'data_output/NB1/{country_name}_LGPt10_{year}.tif')).ReadAsArray()
