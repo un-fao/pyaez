@@ -464,25 +464,55 @@ class CropSimulation(object):
     
     
     
-    def ImportLGPandLGPT(self):
+    def ImportLGPandLGPT(
+        self,
+        lgp=None,
+        lgpt0=None,
+        lgpt5=None,
+        lgpt10=None
+    ):
         """
         (MANDATORY FUNCTION)
-        Importing LGP and temperature growing period data.
+        Import LGP and temperature growing period data.
 
-        Args:
-            None.
-            
-        Return:
-            None.
+        Parameters
+        ----------
+        lgp : np.ndarray, optional
+            Longest Length of Growing Period.
+        lgpt0 : np.ndarray, optional
+            Temperature growing period above 0°C.
+        lgpt5 : np.ndarray, optional
+            Temperature growing period above 5°C.
+        lgpt10 : np.ndarray, optional
+            Temperature growing period above 10°C.
+
+        Returns
+        -------
+        None
         """
 
-        # Reading the gp outputs from module 1
-        lgp = gdal.Open(rf'./data_output/NB1/{self.country_name}_lgplongest_{self.year}.tif').ReadAsArray()
-        lgpt0 = gdal.Open(rf'./data_output/NB1/{self.country_name}_LGPt0_{self.year}.tif').ReadAsArray()
-        lgpt5 = gdal.Open(rf'./data_output/NB1/{self.country_name}_LGPt5_{self.year}.tif').ReadAsArray()
-        lgpt10 = gdal.Open(rf'./data_output/NB1/{self.country_name}_LGPt10_{self.year}.tif').ReadAsArray()
-        #lgp_equv = gdal.Open(rf'./data_output/NB1/{aez.country_name}_LGPEquivalent_{aez.year}.tif').ReadAsArray()
-    
+        # Read from disk only when not provided
+        if lgp is None:
+            lgp = gdal.Open(
+                rf'./data_output/NB1/{self.country_name}_lgplongest_{self.year}.tif'
+            ).ReadAsArray()
+
+        if lgpt0 is None:
+            lgpt0 = gdal.Open(
+                rf'./data_output/NB1/{self.country_name}_LGPt0_{self.year}.tif'
+            ).ReadAsArray()
+
+        if lgpt5 is None:
+            lgpt5 = gdal.Open(
+                rf'./data_output/NB1/{self.country_name}_LGPt5_{self.year}.tif'
+            ).ReadAsArray()
+
+        if lgpt10 is None:
+            lgpt10 = gdal.Open(
+                rf'./data_output/NB1/{self.country_name}_LGPt10_{self.year}.tif'
+            ).ReadAsArray()
+
+        # Initialize class attributes
         self.LGP = lgp
         self.LGPT0 = lgpt0
         self.LGPT5 = lgpt5
