@@ -296,14 +296,15 @@ class CropSimulation(object):
 
                 # totalPrec_monthly = averageDailyToMonthly(self.totalPrec_daily[i_row, i_col, :], self.leap_year)
                 meanT_daily_point = Ta365[i_row, i_col, :]
-                istart0, istart1 = rainPeak(meanT_daily_point, lgpt5_point)
-                
-                istup = getTempTrend(self.meanT_daily[i_row, i_col, :])
-                #----------------------------------
                 if self.set_mask:
                     if self.im_mask[i_row, i_col] == self.nodata_val:
                         continue
 
+                istart0, istart1 = rainPeak(meanT_daily_point, lgpt5_point)
+                
+                istup = getTempTrend(self.meanT_daily[i_row, i_col, :])
+                #----------------------------------
+                
                 for d in range(0, doy):
                     p = psh(0., self.Eto365[i_row, i_col, d])
                     Eta_new, Etm_new, Wb_new, Wx_new, Sb_new, kc_new = RefWaterBalanceCalc(
