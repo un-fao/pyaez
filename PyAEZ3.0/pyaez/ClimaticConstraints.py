@@ -746,7 +746,7 @@ class ClimaticConstraints(object):
             yield_input=yield_map,
             lgp=lgp,
             lgp_equv=lgp_equv,
-            lgpt10=lgp10,
+            lgpt10=lgpt10,
             omit_yld_0=True
         )
     
