@@ -1616,7 +1616,7 @@ def CropCycleLooping(start_doy:int, end_doy:int, step_doy:int, climate_data, lgp
     eta= eta_arr[idx]
     fc1= fc1_arr[idx]
     fc2= fc2_arr[idx]
-    ccd = idx+1
+    ccd = start_doy + idx * step_doy #this implementation is useful when starting date and step_doy are different from 1
 
     return yld, wde, eta, fc1, fc2, ccd
 
