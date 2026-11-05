@@ -1044,97 +1044,168 @@ def initialize_aez(
         country_name: str,
         management: str = 'HI',
         daily: bool = True,
-        climate_folder: str = ''
+        climate_folder: str = '',
+        crop_param_filename: str = ''
     ):
     """
-    Initialize and configure an AEZ ``CropSimulation`` object for a given country/year.
+    Initialize and configure a PyAEZ ``CropSimulation`` object for a given
+    country, year, and climate dataset.
 
     This routine:
-      1) switches the current working directory to ``work_dir`` and adds it to ``sys.path``,
-      2) loads climate inputs (tasmin/tasmax/pr/hurs/sfcWind/rsds and time array),
-      3) loads the study-area mask and elevation raster,
-      4) filters the climate series to the requested ``year`` (removing Feb 29 for leap years),
-      5) configures the AEZ model with daily or monthly climate & water data,
-      6) loads crop/crop-cycle parameters based on ``management``,
-      7) imports NB1 screening rasters (Thermal Climate & Permafrost),
-      8) sets up crop-specific temperature profile rules, and
-      9) imports LGP and LGPT rasters (NB1 outputs) into the model.
+
+    1. Initializes a PyAEZ ``CropSimulation`` instance.
+    2. Loads climate variables from the specified climate data folder:
+       minimum temperature, maximum temperature, precipitation,
+       relative humidity, wind speed, solar radiation, and time stamps.
+    3. Loads the study-area mask and elevation raster associated with
+       the selected country.
+    4. Filters climate data to the requested year when daily simulations
+       are selected, removing February 29th from leap years.
+    5. Configures the model with daily or monthly climate and water data.
+    6. Loads crop and crop-cycle parameters from a user-provided file or
+       from the default parameter file corresponding to the selected
+       management level.
+    7. Applies crop-specific temperature profile rules.
+    8. Stores metadata (country, year, reference raster) in the model
+       instance.
+    9. Serializes the configured model object to
+       ``./data_input/input_module2/aez.pkl``.
 
     Parameters
     ----------
     year : str
-        Year selector used to filter the time dimension of the climate arrays.
-        Example: ``"1990"``. If the selected year has 366 daily entries, day index 59
-        (Feb 29) is removed to keep 365 days.
+        Year to be simulated. Used to select the corresponding slices
+        from the climate time series when ``daily=True``.
+
     country_name : str
-        Country (or study area) identifier used to build NB1 filenames. The function
-        expects NB1 rasters with names like:
-        ``{country_name.lower()}_ThermalClimate_{year}.tif`` and
-        ``{country_name.lower()}_permafrost_{year}.tif`` under ``data_output/NB1/``.
-    management : {'HI','LI'}, optional
-        Crop parameter set. ``'HI'`` (high input) is supported and loads
-        ``./data_input/input_crop_TSUM_parameters_HI.xlsx``.
-        ``'LI'`` currently raises ``RuntimeError`` because low‑input parameters
-        are not provided.
+        Country or study area name. Used to derive the names of the
+        mask raster and elevation raster:
+
+        - ``{country_name}_rasterized.tif``
+        - ``{country_name}_elevation_resampled_clipped.tif``
+
+    management : {'HI', 'LI'}, optional
+        Management level used to select the default crop parameter file
+        when ``crop_param_filename`` is not provided.
+
+        - ``'HI'``: High-input management
+        - ``'LI'``: Low-input management (currently not implemented)
+
+        Default is ``'HI'``.
+
     daily : bool, optional
-        If ``True``, pass **daily** climate series for the selected year to the model.
-        If ``False``, pass **monthly** climatologies (full arrays without per‑year filtering).
+        If ``True``, climate data are filtered to the selected year and
+        passed to the model as daily time series.
+
+        If ``False``, the full arrays are passed directly to
+        ``setMonthlyClimateAndWaterData()``.
+
+        Default is ``True``.
+
+    climate_folder : str, optional
+        Relative path to the folder containing the climate input files.
+
+        The folder must contain:
+
+        - ``tasmax.npy``
+        - ``tasmin.npy``
+        - ``pr.npy``
+        - ``hurs.npy``
+        - ``sfcWind.npy``
+        - ``rsds.npy``
+        - ``time_array.npy``
+
+        Default is ``''``.
+
+    crop_param_filename : str, optional
+        Path to the crop parameter workbook.
+
+        If not provided, a default file is selected according to the
+        value of ``management``. For example:
+
+        - ``./data_input/input_crop_TSUM_parameters_HI.xlsx``
+
+        Default is ``''``.
 
     Returns
     -------
-    aez : pyaez.CropSimulation.CropSimulation
-        A configured AEZ CropSimulation instance with:
-        - study area mask and location/terrain set,
-        - daily or monthly climate & water data loaded,
-        - crop & crop-cycle parameters loaded,
-        - thermal climate and permafrost screening applied,
-        - crop-specific temperature profile rules set,
-        - LGP and LGPT rasters imported.
-    
+    pyaez.CropSimulation.CropSimulation
+        Configured CropSimulation object with:
+
+        - study area mask loaded,
+        - terrain and elevation configured,
+        - climate and water data assigned,
+        - crop and crop-cycle parameters loaded,
+        - crop-specific temperature rules applied.
+
     Notes
     -----
-    - **Side effects**: Changes process CWD (``os.chdir(work_dir)``) and modifies ``sys.path``.
-    - **File dependencies**:
-        * Climate inputs in ``{work_dir}/data_input/CAVA_data``:
-          ``tasmax.npy``, ``tasmin.npy``, ``pr.npy``, ``hurs.npy``,
-          ``sfcWind.npy``, ``rsds.npy``, ``time_array.npy``.
-        * Mask and elevation in ``{work_dir}/data_input``:
-          ``country_mask_name``, ``elevation_filename``.
-        * Crop parameter workbook:
-          ``./data_input/input_crop_TSUM_parameters_HI.xlsx`` (when ``management='HI'``).
-        * NB1 rasters in ``{work_dir}/data_output/NB1``:
-          ``{country_name.lower()}_ThermalClimate_{year}.tif``,
-          ``{country_name.lower()}_permafrost_{year}.tif``,
-          ``{country_name}_LGP_{year}.tif``,
-          ``{country_name}_LGPt5_{year}.tif``,
-          ``{country_name}_LGPt10_{year}.tif``.
-    - **Array shapes**: This function assumes 3‑D arrays ``(rows, cols, time)`` for climate inputs.
-      The country mask and elevation rasters must align spatially with the climate grids.
+    The function expects the following country-specific files under
+    ``./data_input``:
+
+    - ``{country_name}_rasterized.tif``
+    - ``{country_name}_elevation_resampled_clipped.tif``
+
+    The climate arrays are expected to have dimensions:
+
+    ``(rows, cols, time)``
+
+    The mask, elevation raster, and climate grids must share the same
+    spatial extent and resolution.
+
+    Side effects
+    ------------
+    - Creates ``./data_output/NB2`` if it does not exist.
+    - Creates ``./data_input/input_module2`` if it does not exist.
+    - Writes the configured model object to:
+
+      ``./data_input/input_module2/aez.pkl``
 
     Raises
     ------
     RuntimeError
-        If ``management='LI'`` (low‑input parameters not yet available).
+        If ``management='LI'`` and no low-input parameter file is available.
+
     NameError
         If ``management`` is neither ``'HI'`` nor ``'LI'``.
-    FileNotFoundError / OSError
-        If any required input file cannot be opened/read by GDAL or NumPy.
+
+    FileNotFoundError
+        If required climate, mask, elevation, or crop parameter files
+        cannot be found.
+
+    OSError
+        If raster or NumPy files cannot be opened.
+
     ValueError
-        If time filtering yields an unexpected number of daily slices.
+        If the selected time series produces an unexpected daily
+        configuration.
 
     Examples
     --------
     >>> aez = initialize_aez(
     ...     year="1990",
-    ...     country_name="Ghana",
-    ...     country_mask_name="ghana_mask.tif",
-    ...     elevation_filename="srtm_ghana.tif",
+    ...     country_name="Pakistan",
     ...     management="HI",
     ...     daily=True,
+    ...     climate_folder="./data_input/CAVA_data",
     ... )
-    >>> # The model is now configured and ready for simulation steps.
+
+    >>> aez = initialize_aez(
+    ...     year="2020",
+    ...     country_name="Ghana",
+    ...     crop_param_filename="./data_input/maize_parameters.xlsx"
+    ... )
     """
 
+    if not year:
+        raise ValueError("year must be provided")
+
+    if not country_name:
+        raise ValueError("country_name must be provided")
+
+    if management not in ("HI", "LI"):
+        raise ValueError("management must be either 'HI' or 'LI'")
+        
     country_mask_name = f'{country_name}_rasterized.tif'
 
     # Set working directory
@@ -1209,13 +1280,14 @@ def initialize_aez(
             min_temp, max_temp, precipitation, short_rad, wind_speed, rel_humidity, Sa, D
         )
 
-    if management == 'HI':
-        crop_param_filename = r'./data_input/input_crop_TSUM_parameters_HI.xlsx'
-    elif management == 'LI':
-        # crop_param_filename = r'./data_input/input_crop_TSUM_parameters_LI.xlsx'
-        raise RuntimeError("Low input parameters are yet to be provided")
-    else:
-        raise NameError("The variable management can be either 'HI' or 'LI'.")
+    if not crop_param_filename:
+        if management == 'HI':
+            crop_param_filename = r'./data_input/input_crop_TSUM_parameters_HI.xlsx'
+        elif management == 'LI':
+            # crop_param_filename = r'./data_input/input_crop_TSUM_parameters_LI.xlsx'
+            raise RuntimeError("Low input parameters are yet to be provided")
+        else:
+            raise NameError("The variable management can be either 'HI' or 'LI'.")
 
     crop_name = choose_crop(crop_param_filename)
 
