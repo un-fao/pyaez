@@ -304,7 +304,7 @@ def choose_scenario():
     # MANAGEMENT
     ttk.Label(root, text="Management:").pack(pady=5)
     management_var = tk.StringVar()
-    management_list = ["HI", "LI"]
+    management_list = ["High", "Low"]
     ttk.Combobox(root, textvariable=management_var, values=management_list, state="readonly").pack()
 
     # Storage for results
