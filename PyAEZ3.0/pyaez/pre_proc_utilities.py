@@ -1042,7 +1042,7 @@ def initialize_clim(
 def initialize_aez(
         year: str,
         country_name: str,
-        management: str = 'HI',
+        management: str = 'High',
         daily: bool = True,
         climate_folder: str = '',
         crop_param_filename: str = ''
@@ -1084,14 +1084,14 @@ def initialize_aez(
         - ``{country_name}_rasterized.tif``
         - ``{country_name}_elevation_resampled_clipped.tif``
 
-    management : {'HI', 'LI'}, optional
+    management : {'High', 'Low'}, optional
         Management level used to select the default crop parameter file
         when ``crop_param_filename`` is not provided.
 
-        - ``'HI'``: High-input management
-        - ``'LI'``: Low-input management (currently not implemented)
+        - ``'High'``: High-input management
+        - ``'Low'``: Low-input management (currently not implemented)
 
-        Default is ``'HI'``.
+        Default is ``'High'``.
 
     daily : bool, optional
         If ``True``, climate data are filtered to the selected year and
@@ -1164,10 +1164,10 @@ def initialize_aez(
     Raises
     ------
     RuntimeError
-        If ``management='LI'`` and no low-input parameter file is available.
+        If ``management='Low'`` and no low-input parameter file is available.
 
     NameError
-        If ``management`` is neither ``'HI'`` nor ``'LI'``.
+        If ``management`` is neither ``'High'`` nor ``'Low'``.
 
     FileNotFoundError
         If required climate, mask, elevation, or crop parameter files
@@ -1185,7 +1185,7 @@ def initialize_aez(
     >>> aez = initialize_aez(
     ...     year="1990",
     ...     country_name="Pakistan",
-    ...     management="HI",
+    ...     management="High",
     ...     daily=True,
     ...     climate_folder="./data_input/CAVA_data",
     ... )
@@ -1202,10 +1202,7 @@ def initialize_aez(
 
     if not country_name:
         raise ValueError("country_name must be provided")
-
-    if management not in ("HI", "LI"):
-        raise ValueError("management must be either 'HI' or 'LI'")
-        
+    
     country_mask_name = f'{country_name}_rasterized.tif'
 
     # Set working directory
@@ -1281,13 +1278,13 @@ def initialize_aez(
         )
 
     if not crop_param_filename:
-        if management == 'HI':
+        if management == 'High':
             crop_param_filename = r'./data_input/input_crop_TSUM_parameters_HI.xlsx'
-        elif management == 'LI':
+        elif management == 'Low':
             # crop_param_filename = r'./data_input/input_crop_TSUM_parameters_LI.xlsx'
             raise RuntimeError("Low input parameters are yet to be provided")
         else:
-            raise NameError("The variable management can be either 'HI' or 'LI'.")
+            raise NameError("The variable management can be either 'High' or 'Low'.")
 
     crop_name = choose_crop(crop_param_filename)
 
@@ -1349,7 +1346,7 @@ def initialize_climatic_constraints(
       - Changes the working directory to `work_dir` and adds it to `sys.path`,
       - Loads the study-area mask and elevation raster,
       - Extracts geospatial bounds from the mask,
-      - Loads crop parameter workbook based on `management` (HI or LI),
+      - Loads crop parameter workbook based on `management` ('High' or 'Low'),
       - Prompts the user to select a crop interactively,
       - Loads climate input arrays (tasmin, tasmax, pr, hurs, sfcWind, rsds, time_array),
       - Filters climate data for the specified `year` (removing Feb 29 for leap years),
@@ -1364,10 +1361,10 @@ def initialize_climatic_constraints(
         (Feb 29) is removed to keep 365 days.
     country_name : str
         Country or study-area name (used for file naming and logging).
-    management : {'HI','LI'}
+    management : {'High','Low'}
         Crop parameter set:
-        - 'HI' loads `input_crop_TSUM_parameters_HI.xlsx`,
-        - 'LI' currently raises `RuntimeError` (not implemented).
+        - 'High' loads `input_crop_TSUM_parameters_HI.xlsx`,
+        - 'Low' currently raises `RuntimeError` (not implemented).
     
     Returns
     -------
@@ -1388,7 +1385,7 @@ def initialize_climatic_constraints(
         * Mask and elevation in `data_input/`:
           `country_mask_name`, `elevation_filename`.
         * Crop parameter workbook:
-          `input_crop_TSUM_parameters_HI.xlsx` (when `management='HI'`).
+          `input_crop_TSUM_parameters_HI.xlsx` (when `management='High'`).
         * Climate arrays in `data_input/CAVA_data`:
           `tasmax.npy`, `tasmin.npy`, `pr.npy`, `hurs.npy`,
           `sfcWind.npy`, `rsds.npy`, `time_array.npy`.
@@ -1401,9 +1398,9 @@ def initialize_climatic_constraints(
     FileNotFoundError
         If the working directory, mask, elevation, or any climate input file is missing.
     RuntimeError
-        If `management='LI'` (low-input parameters not yet available).
+        If `management='Low'` (low-input parameters not yet available).
     NameError
-        If `management` is neither 'HI' nor 'LI'.
+        If `management` is neither 'High' nor 'Low'.
     ValueError
         If time filtering yields an unexpected number of daily slices.
     IndexError
@@ -1415,7 +1412,7 @@ def initialize_climatic_constraints(
     ...     work_dir=r"D:/Projects/AEZ",
     ...     country_name="Ghana",
     ...     country_mask_name="ghana_mask.tif",
-    ...        ...     management="HI",
+    ...        ...     management="High",
     ...     year="1990"
     ... )
     >>> # ClimaticConstraints object is now ready for NB3 computations.
