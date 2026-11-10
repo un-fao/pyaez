@@ -309,7 +309,7 @@ def calculateBiomassNumba(cycle_begin:int, cycle_end:int, cycle_len:int, latitud
         * bna
         * cgc
         / (1000.0 + 250.0 * cgc * Ct)
-    )
+    ) * 1000 # expressed in kg/ha
 
     return Bn
 
