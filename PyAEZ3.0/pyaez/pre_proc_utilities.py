@@ -1045,7 +1045,9 @@ def initialize_aez(
         management: str = 'High',
         daily: bool = True,
         climate_folder: str = '',
-        crop_param_filename: str = ''
+        crop_param_filename: str = '',
+        Sa: float = 100.0,
+        D: float = 1.0,
     ):
     """
     Initialize and configure a PyAEZ ``CropSimulation`` object for a given
@@ -1062,14 +1064,16 @@ def initialize_aez(
     4. Filters climate data to the requested year when daily simulations
        are selected, removing February 29th from leap years.
     5. Configures the model with daily or monthly climate and water data.
-    6. Loads crop and crop-cycle parameters from a user-provided file or
+    6. Configures soil water holding capacity and rooting depth for
+       the soil water balance calculations.
+    7. Loads crop and crop-cycle parameters from a user-provided file or
        from the default parameter file corresponding to the selected
        management level.
-    7. Applies crop-specific temperature profile rules.
-    8. Stores metadata (country, year, reference raster) in the model
+    8. Applies crop-specific temperature profile rules.
+    9. Stores metadata (country, year, reference raster) in the model
        instance.
-    9. Serializes the configured model object to
-       ``./data_input/input_module2/aez.pkl``.
+    10. Serializes the configured model object to
+        ``./data_input/input_module2/aez.pkl``.
 
     Parameters
     ----------
@@ -1127,6 +1131,26 @@ def initialize_aez(
 
         Default is ``''``.
 
+    Sa : float, optional
+        Soil water holding capacity (mm m⁻¹), used by the soil water
+        balance component of PyAEZ when computing crop water availability
+        and water-limited yield.
+    
+        A single value is applied uniformly across the study area.
+    
+        Default is ``100.0``.
+    
+    D : float, optional
+        Effective rooting depth (m) assumed for the crop water balance.
+    
+        This parameter defines the depth of soil that can be explored by
+        roots for water extraction and is used together with ``Sa`` to
+        estimate the total available soil water storage.
+    
+        A single value is applied uniformly across the study area.
+    
+        Default is ``1.0``.
+
     Returns
     -------
     pyaez.CropSimulation.CropSimulation
@@ -1135,6 +1159,7 @@ def initialize_aez(
         - study area mask loaded,
         - terrain and elevation configured,
         - climate and water data assigned,
+        - soil water holding capacity and rooting depth configured,
         - crop and crop-cycle parameters loaded,
         - crop-specific temperature rules applied.
 
@@ -1258,9 +1283,6 @@ def initialize_aez(
     # Configure AEZ objectcrop_param_filename
     aez.setStudyAreaMask(admin_mask=mask, no_data_value=0)
     aez.setLocationTerrainData(lat_min=lat_min, lat_max=lat_max, elevation=elevation)
-
-    # Soil water holding capacity and rooting depth
-    Sa, D = 100., 1.
 
     if daily:
         aez.setDailyClimateAndWaterData(
