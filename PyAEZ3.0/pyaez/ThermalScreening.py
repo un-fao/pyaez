@@ -572,15 +572,48 @@ def calculateTemperatureProfileClasses(
     # Evaluate thresholds
     # ==========================================================
 
-    def evaluate_threshold(value):
+    def normalize_gaez_expression(expr):
+        """
+        Convert GAEZ Unicode mathematical symbols into Python-compatible syntax.
+        """
 
-        if pd.isna(value):
+        if expr is None:
+            return expr
+
+        expr = str(expr).strip()
+
+        replacements = {
+            "×": "*",
+            "÷": "/",
+            "−": "-",
+            "≤": "<=",
+            "≥": ">=",
+        }
+
+        for old, new in replacements.items():
+            expr = expr.replace(old, new)
+
+        return expr
+
+
+    def evaluate_threshold(value, eval_context):
+        """
+        Evaluate a threshold value from the GAEZ tables.
+
+        Examples
+        --------
+        "180"            -> 180.0
+        "0.200×CY"       -> 0.2 * CY
+        "0.167×LGPT05"   -> 0.167 * LGPT05
+        "N3+N4"          -> evaluated value
+        "n.a."           -> None
+        """
+
+        # Missing values
+        if value is None:
             return None
 
-        if isinstance(value, (int, float)):
-            return float(value)
-
-        value = str(value).strip()
+        value = normalize_gaez_expression(value)
 
         if value.lower() in (
             "",
@@ -591,50 +624,61 @@ def calculateTemperatureProfileClasses(
         ):
             return None
 
+        # Already numeric
         try:
             return float(value)
-
-        except ValueError:
+        except Exception:
             pass
 
+        # Evaluate GAEZ expression
         try:
-            return float(eval(value, {}, eval_context))
+            return float(
+                eval(
+                    value,
+                    {"__builtins__": {}},
+                    eval_context
+                )
+            )
 
         except NameError as exc:
 
             print(
-                "[GAEZ WARNING] Unsupported threshold "
-                f"expression '{value}'. "
-                f"Variable not yet implemented: {exc}"
+                "[GAEZ WARNING] Unsupported threshold expression "
+                f"'{value}'. Missing variable: {exc}"
             )
 
-            return value
+            # Do NOT return string, otherwise
+            # getReductionFactorNumba will crash later
+            return float("nan")
 
         except Exception as exc:
 
             print(
-                "[GAEZ WARNING] Unable to evaluate "
-                f"threshold expression '{value}': {exc}"
+                "[GAEZ WARNING] Cannot evaluate threshold "
+                f"'{value}': {exc}"
             )
 
-            return value
+            # Do NOT return string
+            return float("nan")
 
     # ==========================================================
     # Convert Optimal/Sub-Optimal/Not-Suitable
     # ==========================================================
 
+    eval_context = locals().copy()
+
     optimal = [
-        evaluate_threshold(x)
+        evaluate_threshold(x, eval_context)
         for x in optimal
     ]
 
     sub_optimal = [
-        evaluate_threshold(x)
+        evaluate_threshold(x, eval_context)
         for x in sub_optimal
     ]
 
     not_suitable = [
-        evaluate_threshold(x)
+        evaluate_threshold(x, eval_context)
         for x in not_suitable
     ]
 
