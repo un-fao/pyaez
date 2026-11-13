@@ -18,6 +18,7 @@ import numpy as np
 import numba as nb
 from numba.typed import List
 from scipy.interpolate import interp1d, PchipInterpolator  # shape-preserving cubic
+import pandas as pd
 
 np.round_ = np.round
 
