@@ -441,128 +441,56 @@ def calculateTemperatureProfileClasses(
         i_cycle,
         cycle_len
     ):
-    """
-    Compute temperature‑profile class metrics for a full year (365 days) and for a
-    crop cycle window, then evaluate user/crop‑specific constraint equations.
 
-    The function:
-      1) Loads crop‑specific rule parameters via `insertCropSpecificRuleParameters(data)`,
-      2) Computes temperature‑profile counts for the whole year (`tpro365`) and for the
-         selected cycle window (`trpocycle`) using `getTemperatureProfile(...)`,
-      3) Aggregates paired daytime/nighttime (or "a"/"b") bins into 10 combined bins
-         for the year (N0..N9) and for the cycle (L0..L9),
-      4) Computes cycle‑window RH statistics (`RHavg`, `RHmin`, `RHmax`) from `input_RH`,
-      5) Evaluates each constraint expression in `rule` (strings) using the variables
-         defined above, returning the numeric values and the associated class thresholds.
-
-    Parameters
-    ----------
-    data : Any
-        Crop‑specific configuration or rule source passed to
-        `insertCropSpecificRuleParameters(data)`. The helper is expected to return a
-        5‑tuple/list: `(rule, constr_type, optimal, sub_optimal, not_suitable)`.
-        - `rule` is a sequence of string expressions to be evaluated (e.g., "N3 >= 10 and L4 > 5").
-        - `constr_type`, `optimal`, `sub_optimal`, `not_suitable` are parallel sequences
-          describing constraint labels and class thresholds.
-    input_temp : array_like
-        1‑D sequence of daily mean (or representative) temperatures for the full year.
-        Expected length: 365 (indexable). Units should match what
-        `getTemperatureProfile(...)` expects (e.g., °C).
-    input_RH : array_like
-        1‑D sequence of daily relative humidity values (percent, 0–100) for the full year.
-        Used to compute `RHavg`, `RHmin`, `RHmax` over the crop cycle window.
-    LGPT00 : int
-        LGPt0 value for the specific crop
-    LGPT05 : int
-        LGPt5 value for the specific crop
-    LGPT10 : int
-        LGPt10 value for the specific crop
-    i_cycle : int
-        Start index (0‑based) of the crop cycle window within the year. The slice
-        `[i_cycle : i_cycle + cycle_len]` must lie within the bounds of `input_temp`
-        and `input_RH`.
-    cycle_len : int
-        Length (in days) of the crop cycle window to analyze.
-
-    Returns
-    -------
-    calc_value : list of numbers
-        Numeric results of evaluating each rule expression in `rule`. Each element is
-        typically a boolean (0/1) or numeric score, depending on the expressions.
-    constr_type : list
-        Constraint identifiers (e.g., names or codes) corresponding to each rule.
-    optimal : list
-        Thresholds/parameters defining **optimal** class for each constraint.
-    sub_optimal : list
-        Thresholds/parameters defining **sub‑optimal** class for each constraint.
-    not_suitable : list
-        Thresholds/parameters defining **not‑suitable** class for each constraint.
-
-    Notes
-    -----
-    - **Temperature profiles**: `getTemperatureProfile(x)` is expected to return a 20‑element
-      vector where indices 0–9 (`*a`) and 10–19 (`*b`) are paired bins; the function
-      aggregates them as:
-        N*k = N*k_a + N*k_b  (yearwide)  and  L*k = L*k_a + L*k_b (cycle window),
-      yielding k ∈ {0..9}. The exact bin meaning (e.g., temperature ranges) depends on
-      your `getTemperatureProfile` implementation.
-    - **Relative humidity**: `getRHstats(...)` must return `(RHavg, RHmin, RHmax)` for the
-      provided window; units should match the rules’ expectations.
-    - **Variables available to rules**:
-        * Year bins: `N0..N9`
-        * Cycle bins: `L0..L9`
-        * Cycle RH stats: `RHavg`, `RHmin`, `RHmax`
-      If your rules reference other variables (e.g., `LGPT00`), ensure they are defined
-      before rule evaluation.
-    - **Safety**: Rule expressions are evaluated with Python `eval`. Only use trusted rule
-      sources or replace `eval` with a safe expression parser if rules can be user‑provided.
-    - **Bounds**: The slice `[i_cycle : i_cycle + cycle_len]` must be valid for both
-      `input_temp` and `input_RH`. Validate indices before calling if they may vary.
-
-    Examples
-    --------
-    >>> # Minimal illustration (assuming helpers are available in scope):
-    >>> calc_value, ctype, opt, subopt, ns = calculateTemperatureProfileClasses(
-    ...     data=cfg,                       # source for insertCropSpecificRuleParameters
-    ...     input_temp=temp365,             # length 365
-    ...     input_RH=rh365,                 # length 365
-    ...     LGPT00=None,                    # lgpt0
-    ...     LGPT05=None,                    # lgpt5
-    ...     LGPT10=None,                    # lgpt10
-    ...     i_cycle=90,                     # start at day 90
-    ...     cycle_len=120                   # 120-day crop    ...     cycle_len=120                   # 120-day crop cycle
-    ... )
-    """
-    
     Rule_data = insertCropSpecificRuleParameters(data)
 
     rule = Rule_data[0]
-    
+
     constr_type = []
-    optimal= []
-    sub_optimal= []
-    not_suitable= []
+    optimal = []
+    sub_optimal = []
+    not_suitable = []
 
     CY = cycle_len
-    CYb = CY # check that for winter crops the growing period is defined without hibernating period
-    
+    CYb = CY  # TODO: update for winter crops if hibernation period excluded
+
     for i in range(len(Rule_data[1])):
         constr_type.append(Rule_data[1][i])
-    
+
     for i in range(len(Rule_data[2])):
         optimal.append(Rule_data[2][i])
-    
+
     for i in range(len(Rule_data[3])):
         sub_optimal.append(Rule_data[3][i])
-    
+
     for i in range(len(Rule_data[4])):
         not_suitable.append(Rule_data[4][i])
 
     tpro365 = getTemperatureProfile(input_temp)
-    trpocycle = getTemperatureProfile(input_temp[i_cycle:i_cycle+cycle_len])
-    RHavg, RHmin, RHmax = getRHstats(input_RH)  #[i_cycle:i_cycle+cycle_len]
-    
-    """For 365 days"""
+    trpocycle = getTemperatureProfile(
+        input_temp[i_cycle:i_cycle + cycle_len]
+    )
+
+    RHavg, RHmin, RHmax = getRHstats(input_RH)
+
+    # ==========================================================
+    # GAEZ RH thresholds are expressed in %
+    # ClimateRegime internally uses humidity in [0,1]
+    # ==========================================================
+
+    if (
+        RHavg <= 1.0 and
+        RHmin <= 1.0 and
+        RHmax <= 1.0
+    ):
+        RHavg *= 100.0
+        RHmin *= 100.0
+        RHmax *= 100.0
+
+    # ==========================================================
+    # For 365 days
+    # ==========================================================
+
     N0a = tpro365[0]
     N1a = tpro365[1]
     N2a = tpro365[2]
@@ -573,7 +501,7 @@ def calculateTemperatureProfileClasses(
     N7a = tpro365[7]
     N8a = tpro365[8]
     N9a = tpro365[9]
-    
+
     N0b = tpro365[10]
     N1b = tpro365[11]
     N2b = tpro365[12]
@@ -596,8 +524,10 @@ def calculateTemperatureProfileClasses(
     N8 = N8a + N8b
     N9 = N9a + N9b
 
+    # ==========================================================
+    # For cycle-length specific
+    # ==========================================================
 
-    """For cycle-length specific"""
     L0a = trpocycle[0]
     L1a = trpocycle[1]
     L2a = trpocycle[2]
@@ -631,13 +561,100 @@ def calculateTemperatureProfileClasses(
     L8 = L8a + L8b
     L9 = L9a + L9b
 
-    # Evaluate each constraint equations and append
+    # ==========================================================
+    # Context used by GAEZ expressions
+    # ==========================================================
+
+    eval_context = locals().copy()
+
+    # ==========================================================
+    # Evaluate thresholds
+    # ==========================================================
+
+    def evaluate_threshold(value):
+
+        if pd.isna(value):
+            return None
+
+        if isinstance(value, (int, float)):
+            return float(value)
+
+        value = str(value).strip()
+
+        if value.lower() in (
+            "",
+            "n.a.",
+            "n.a",
+            "na",
+            "nan"
+        ):
+            return None
+
+        try:
+            return float(value)
+
+        except ValueError:
+            pass
+
+        try:
+            return float(eval(value, {}, eval_context))
+
+        except NameError as exc:
+
+            print(
+                "[GAEZ WARNING] Unsupported threshold "
+                f"expression '{value}'. "
+                f"Variable not yet implemented: {exc}"
+            )
+
+            return value
+
+        except Exception as exc:
+
+            print(
+                "[GAEZ WARNING] Unable to evaluate "
+                f"threshold expression '{value}': {exc}"
+            )
+
+            return value
+
+    # ==========================================================
+    # Convert Optimal/Sub-Optimal/Not-Suitable
+    # ==========================================================
+
+    optimal = [
+        evaluate_threshold(x)
+        for x in optimal
+    ]
+
+    sub_optimal = [
+        evaluate_threshold(x)
+        for x in sub_optimal
+    ]
+
+    not_suitable = [
+        evaluate_threshold(x)
+        for x in not_suitable
+    ]
+
+    # ==========================================================
+    # Evaluate rule expressions
+    # ==========================================================
+
     calc_value = []
+
     for i in range(len(rule)):
-        calc_value.append(eval(rule[i]))
-        #if 'RH' in rule[i]:
-        # print(rule[i], calc_value[i], constr_type[i], optimal[i], sub_optimal[i], not_suitable[i])
-        
-    return calc_value, constr_type, optimal, sub_optimal, not_suitable
+
+        calc_value.append(
+            eval(rule[i], {}, eval_context)
+        )
+
+    return (
+        calc_value,
+        constr_type,
+        optimal,
+        sub_optimal,
+        not_suitable
+    )
 
 #----------------------------------------------Major Functions Ends Here----------------------------------------------------------------
