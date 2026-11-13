@@ -838,7 +838,6 @@ class CropSimulation(object):
         # Store exactly as setupCropSpecificRule()
         # ==========================================================
 
-        self.crop_name = crop_name
         self.setCropSpecificRule = True
         self.data = crop_rows
 
