@@ -578,33 +578,6 @@ class CropSimulation(object):
         self.permafrost_class = permafrost_class  # permafrost class 2D numpy array
         self.set_Permafrost_screening = True
 
-    def setupCropSpecificRule(self, file_path, crop_name):
-        """
-        (OPTIONAL FUNCTION) Initiates the Crop Specific Rule (Temperature Profile 
-        Constraint) on the existing crop based on user-specified constraint rules.
-
-        Parameters
-        ----------
-        file_path (String): The file path of excel sheet where the Type B constraint rules are provided as xlsx.format.
-        crop_name (String): Unique name of crop to consider. The name must be the corresponding to the Crop_name of crop
-                            parameter sheet.
-
-        Returns
-        -------
-        None.
-
-        """
-
-        data = pd.read_excel(file_path)
-        self.crop_name = crop_name
-
-        self.data = data.loc[data['Crop'] == self.crop_name]
-
-        self.setCropSpecificRule = True
-
-        # releasing data
-        del (data)
-    
     import pandas as pd
 
 
@@ -628,43 +601,27 @@ class CropSimulation(object):
 
         crop_dictionary = {
             "A4-3.3": [
-                "Winter wheat",
-                "Spring wheat",
-                "Sub-tropical wheat",
-                "Tropical wheat",
-                "Rice, Japonica",
-                "Rice, Indica",
-                "Rice, dryland",
-                "Maize, tropical lowland",
-                "Maize, tropical highland",
-                "Maize, sub-trop/temperate",
-                "Maize, silage temperate",
-                "Winter barley",
-                "Spring barley",
-                "Sub-tropical barley",
-                "Tropical barley",
-                "Winter rye",
-                "Spring rye",
-                "Oat",
+                "Winter wheat", "Spring wheat", "Sub-tropical wheat",
+                "Tropical wheat", "Rice, Japonica", "Rice, Indica",
+                "Rice, dryland", "Maize, tropical lowland",
+                "Maize, tropical highland", "Maize, sub-trop/temperate",
+                "Maize, silage temperate", "Winter barley",
+                "Spring barley", "Sub-tropical barley",
+                "Tropical barley", "Winter rye",
+                "Spring rye", "Oat",
                 "Sorghum, tropical, lowland",
                 "Sorghum, tropical, highland",
                 "Sorghum, sub-tropical",
                 "Biomass sorghum, tropical, lowland",
                 "Biomass sorghum, tropical, highland",
                 "Biomass sorghum, sub-tropical",
-                "Pearl millet",
-                "Foxtail millet",
-                "Buckwheat"
+                "Pearl millet", "Foxtail millet", "Buckwheat"
             ],
 
             "A4-3.4": [
-                "White potato",
-                "Sweet potato",
-                "Cassava",
-                "White yam",
-                "Greater yam",
-                "Yellow yam",
-                "Coco yam"
+                "White potato", "Sweet potato", "Cassava",
+                "White yam", "Greater yam",
+                "Yellow yam", "Coco yam"
             ],
 
             "A4-3.5": [
@@ -743,7 +700,7 @@ class CropSimulation(object):
         }
 
         # ==========================================================
-        # Find corresponding sheet
+        # Find sheet
         # ==========================================================
 
         target_sheet = None
@@ -759,7 +716,7 @@ class CropSimulation(object):
             )
 
         # ==========================================================
-        # Read full sheet
+        # Read sheet
         # ==========================================================
 
         raw_df = pd.read_excel(
@@ -769,41 +726,92 @@ class CropSimulation(object):
         )
 
         # ==========================================================
-        # Row 4 (index 3) contains headers
+        # Automatically identify header row
+        # Some sheets start on row 4, others on row 5
         # ==========================================================
 
-        headers = raw_df.iloc[3]
+        header_row = None
+
+        for i in range(min(10, len(raw_df))):
+
+            row_values = raw_df.iloc[i].astype(str)
+
+            if row_values.str.contains(
+                "Common crop name",
+                case=False,
+                na=False
+            ).any():
+
+                header_row = i
+                break
+
+        if header_row is None:
+            raise ValueError(
+                f"Unable to locate table header in sheet '{target_sheet}'."
+            )
+
+        # ==========================================================
+        # Extract headers
+        # ==========================================================
+
+        headers = raw_df.iloc[header_row]
 
         # ==========================================================
         # Reconstruct merged crop-name cells
-        # Column 1 because column 0 is skipped in these sheets
         # ==========================================================
 
         crop_col = raw_df.iloc[:, 1].ffill()
-        crop_col = crop_col.iloc[4:].reset_index(drop=True)
+        crop_col = crop_col.iloc[header_row + 1:].reset_index(drop=True)
 
         # ==========================================================
         # Build clean dataframe
-        # Skip first 4 rows
-        # Skip first column
         # ==========================================================
 
-        df = raw_df.iloc[4:, 1:].copy()
+        df = raw_df.iloc[header_row + 1:, 1:].copy()
 
         df.columns = headers[1:]
-        df = df.reset_index(drop=True)
+        df.reset_index(drop=True, inplace=True)
 
         # ==========================================================
-        # Replace original "Common crop name" column
-        # with reconstructed merged-cell values
+        # Replace original crop column
         # ==========================================================
 
         crop_column_name = df.columns[0]
 
-        df[crop_column_name] = crop_col.values
+        df.iloc[:, 0] = crop_col.values
 
         # ==========================================================
-        # Normalize text
+        # Clean column names
+        # ==========================================================
+
+        df.columns = [
+            str(col)
+            .replace("‘", "")
+            .replace("’", "")
+            .replace("\n", " ")
+            .strip()
+            for col in df.columns
+        ]
+
+        crop_column_name = df.columns[0]
+
+        # ==========================================================
+        # Rename columns to match setupCropSpecificRule()
+        # ==========================================================
+
+        rename_map = {
+            crop_column_name: "Crop",
+            "Constraint subject": "Constraint",
+            "Constraint type": "Type",
+            "Optimum threshold": "Optimal",
+            "Sub- optimum threshold": "Sub-Optimal",
+            "Not suitable threshold": "Not-Suitable"
+        }
+
+        df.rename(columns=rename_map, inplace=True)
+
+        # ==========================================================
+        # Crop filtering
         # ==========================================================
 
         def normalize(text):
@@ -811,12 +819,8 @@ class CropSimulation(object):
 
         target_crop = normalize(crop_name)
 
-        # ==========================================================
-        # Select all rows belonging to crop
-        # ==========================================================
-
         crop_rows = df.loc[
-            df[crop_column_name]
+            df["Crop"]
             .astype(str)
             .str.lower()
             .str.startswith(target_crop)
@@ -828,22 +832,10 @@ class CropSimulation(object):
                 f"'{crop_name}' in sheet '{target_sheet}'."
             )
 
-        # ==========================================================
-        # Optional: reset index after filtering
-        # ==========================================================
-
         crop_rows.reset_index(drop=True, inplace=True)
 
-        # Rename columns 
-        crop_rows.rename(columns={crop_column_name: "Crop"}, inplace=True)
-        crop_rows.rename(columns={"Constraint subject": "Constraint"}, inplace=True)
-        crop_rows.rename(columns={"Constraint type": "Type"}, inplace=True)
-        crop_rows.rename(columns={"‘Optimum’ threshold": "Optimal"}, inplace=True)
-        crop_rows.rename(columns={"‘Sub- optimum’ threshold": "Sub-Optimal"}, inplace=True)
-        crop_rows.rename(columns={"‘Not suitable’ threshold": "Not-Suitable"}, inplace=True)
-        
         # ==========================================================
-        # Store results
+        # Store exactly as setupCropSpecificRule()
         # ==========================================================
 
         self.crop_name = crop_name
@@ -851,7 +843,7 @@ class CropSimulation(object):
         self.data = crop_rows
 
         return None
-    
+
     
     
     """---------------------THERMAL SCREENING FUNCTIONS END HERE (OPTIONAL)--------------------------"""
