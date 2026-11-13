@@ -543,6 +543,9 @@ def calculateTemperatureProfileClasses(
     sub_optimal= []
     not_suitable= []
 
+    CY = cycle_len
+    CYb = CY # check that for winter crops the growing period is defined without hibernating period
+    
     for i in range(len(Rule_data[1])):
         constr_type.append(Rule_data[1][i])
     

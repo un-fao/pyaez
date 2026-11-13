@@ -605,6 +605,255 @@ class CropSimulation(object):
         # releasing data
         del (data)
     
+    import pandas as pd
+
+
+    def setupCropSpecificRuleFromGAEZ(self, file_path, crop_name):
+        """
+        (OPTIONAL FUNCTION) Initiates the Crop Specific Rule (Temperature Profile
+        Constraint) on the existing crop based on GAEZ Appendix tables A4-3.3 to A4-3.11.
+
+        Parameters
+        ----------
+        file_path : str
+            Path to GAEZ4_Appendices.xlsx
+
+        crop_name : str
+            Unique crop name.
+
+        Returns
+        -------
+        None
+        """
+
+        crop_dictionary = {
+            "A4-3.3": [
+                "Winter wheat",
+                "Spring wheat",
+                "Sub-tropical wheat",
+                "Tropical wheat",
+                "Rice, Japonica",
+                "Rice, Indica",
+                "Rice, dryland",
+                "Maize, tropical lowland",
+                "Maize, tropical highland",
+                "Maize, sub-trop/temperate",
+                "Maize, silage temperate",
+                "Winter barley",
+                "Spring barley",
+                "Sub-tropical barley",
+                "Tropical barley",
+                "Winter rye",
+                "Spring rye",
+                "Oat",
+                "Sorghum, tropical, lowland",
+                "Sorghum, tropical, highland",
+                "Sorghum, sub-tropical",
+                "Biomass sorghum, tropical, lowland",
+                "Biomass sorghum, tropical, highland",
+                "Biomass sorghum, sub-tropical",
+                "Pearl millet",
+                "Foxtail millet",
+                "Buckwheat"
+            ],
+
+            "A4-3.4": [
+                "White potato",
+                "Sweet potato",
+                "Cassava",
+                "White yam",
+                "Greater yam",
+                "Yellow yam",
+                "Coco yam"
+            ],
+
+            "A4-3.5": [
+                "Sugar beet, spring types",
+                "Sugar beet, Rabi types",
+                "Sugar cane"
+            ],
+
+            "A4-3.6": [
+                "Phaseol. bean, lowland",
+                "Phaseol. bean, highland",
+                "Phaseol. bean, temperate",
+                "Chickpea, Rabi types",
+                "Chickpea, cold tolerant",
+                "Dry peas",
+                "Cowpea",
+                "Green gram",
+                "Pigeonpea"
+            ],
+
+            "A4-3.7": [
+                "Groundnut",
+                "Soybean, tropical",
+                "Soybean, sub-tropical",
+                "Sunflower, tropical",
+                "Sunflower, sub-tropical/temp.",
+                "Winter rape",
+                "Spring rape",
+                "Rabi rape"
+            ],
+
+            "A4-3.8": [
+                "Cotton, tropical",
+                "Cotton, sub-tropical/temp.",
+                "Flax fibre",
+                "Tobacco, tropical",
+                "Tobacco, sub-tropical",
+                "Para rubber"
+            ],
+
+            "A4-3.9": [
+                "Cabbage",
+                "Carrot, fresh long day",
+                "Carrot, storage long day",
+                "Carrot, fresh short day",
+                "Bulb onion, long day",
+                "Bulb onion, day-neutral",
+                "Bulb onion, short day",
+                "Tomato, day-neutral",
+                "Tomato, short day"
+            ],
+
+            "A4-3.10": [
+                "Banana and plantain",
+                "Oil palm",
+                "Olive",
+                "Citrus sinensis, tropical",
+                "Citrus sinensis, sub-tropical",
+                "Cococa",
+                "Coffee, arabica",
+                "Coffee, robusta",
+                "Coconut, tall and hybrid",
+                "Coconut, dwarf",
+                "Tea, China tea",
+                "Tea, hybrid",
+                "Tea, Assam tea"
+            ],
+
+            "A4-3.11": [
+                "Alfalfa",
+                "Panicum maximum",
+                "Pennisetum purpureum",
+                "Brachiaria decumbens",
+                "Stylosanthes guianensis"
+            ]
+        }
+
+        # ==========================================================
+        # Find corresponding sheet
+        # ==========================================================
+
+        target_sheet = None
+
+        for sheet_name, crops in crop_dictionary.items():
+            if crop_name in crops:
+                target_sheet = sheet_name
+                break
+
+        if target_sheet is None:
+            raise ValueError(
+                f"Crop '{crop_name}' not found in GAEZ crop dictionary."
+            )
+
+        # ==========================================================
+        # Read full sheet
+        # ==========================================================
+
+        raw_df = pd.read_excel(
+            file_path,
+            sheet_name=target_sheet,
+            header=None
+        )
+
+        # ==========================================================
+        # Row 4 (index 3) contains headers
+        # ==========================================================
+
+        headers = raw_df.iloc[3]
+
+        # ==========================================================
+        # Reconstruct merged crop-name cells
+        # Column 1 because column 0 is skipped in these sheets
+        # ==========================================================
+
+        crop_col = raw_df.iloc[:, 1].ffill()
+        crop_col = crop_col.iloc[4:].reset_index(drop=True)
+
+        # ==========================================================
+        # Build clean dataframe
+        # Skip first 4 rows
+        # Skip first column
+        # ==========================================================
+
+        df = raw_df.iloc[4:, 1:].copy()
+
+        df.columns = headers[1:]
+        df = df.reset_index(drop=True)
+
+        # ==========================================================
+        # Replace original "Common crop name" column
+        # with reconstructed merged-cell values
+        # ==========================================================
+
+        crop_column_name = df.columns[0]
+
+        df[crop_column_name] = crop_col.values
+
+        # ==========================================================
+        # Normalize text
+        # ==========================================================
+
+        def normalize(text):
+            return str(text).strip().lower()
+
+        target_crop = normalize(crop_name)
+
+        # ==========================================================
+        # Select all rows belonging to crop
+        # ==========================================================
+
+        crop_rows = df.loc[
+            df[crop_column_name]
+            .astype(str)
+            .str.lower()
+            .str.startswith(target_crop)
+        ].copy()
+
+        if crop_rows.empty:
+            raise ValueError(
+                f"No temperature-profile rules found for crop "
+                f"'{crop_name}' in sheet '{target_sheet}'."
+            )
+
+        # ==========================================================
+        # Optional: reset index after filtering
+        # ==========================================================
+
+        crop_rows.reset_index(drop=True, inplace=True)
+
+        # Rename columns 
+        crop_rows.rename(columns={crop_column_name: "Crop"}, inplace=True)
+        crop_rows.rename(columns={"Constraint subject": "Constraint"}, inplace=True)
+        crop_rows.rename(columns={"Constraint type": "Type"}, inplace=True)
+        crop_rows.rename(columns={"‘Optimum’ threshold": "Optimal"}, inplace=True)
+        crop_rows.rename(columns={"‘Sub- optimum’ threshold": "Sub-Optimal"}, inplace=True)
+        crop_rows.rename(columns={"‘Not suitable’ threshold": "Not-Suitable"}, inplace=True)
+        
+        # ==========================================================
+        # Store results
+        # ==========================================================
+
+        self.crop_name = crop_name
+        self.setCropSpecificRule = True
+        self.data = crop_rows
+
+        return None
+    
+    
+    
     """---------------------THERMAL SCREENING FUNCTIONS END HERE (OPTIONAL)--------------------------"""
     """---------------------------- OPTIONAL FUNCTIONS STARTS HERE  ---------------------------------"""  
 
