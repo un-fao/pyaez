@@ -1521,6 +1521,7 @@ def initialize_climatic_constraints(
     clim_con.input_level = management
     clim_con.country_name = country_name
     clim_con.year = year
+    clim_con.cycle_len = aez.cycle_len
         
     with open(rf'./data_input/input_module3/clim_con.pkl', "wb") as f:
         pickle.dump(clim_con, f)
