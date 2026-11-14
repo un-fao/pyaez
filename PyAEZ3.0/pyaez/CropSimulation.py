@@ -48,7 +48,9 @@ class CropSimulation(object):
         self.set_monthly = False
         self.set_daily = False
         self.leap_year = False
-    
+        self.start_trend = None 
+        self.ta_start_max = None
+        
     """--------------------- MANDATORY FUNCTIONS START HERE --------------------------"""
 
     def load_clim_reg_data(self):
@@ -578,9 +580,6 @@ class CropSimulation(object):
         self.permafrost_class = permafrost_class  # permafrost class 2D numpy array
         self.set_Permafrost_screening = True
 
-    import pandas as pd
-
-
     def setupCropSpecificRuleFromGAEZ(self, file_path, crop_name):
         """
         (OPTIONAL FUNCTION) Initiates the Crop Specific Rule (Temperature Profile
@@ -834,13 +833,23 @@ class CropSimulation(object):
 
         crop_rows.reset_index(drop=True, inplace=True)
 
-        # ==========================================================
-        # Store exactly as setupCropSpecificRule()
-        # ==========================================================
+        subj = crop_rows["Constraint"].astype(str).str.strip()
+        is_trend = subj.str.lower().eq("t trend")
+        is_tastart = subj.str.lower().str.contains("at start")
+
+        # +1 upward, -1 downward, None = no gate
+        self.start_trend = None
+        if is_trend.any():
+            kind = str(crop_rows.loc[is_trend, "Type"].iloc[0]).strip().lower()
+            self.start_trend = 1 if kind == "upward" else -1
+
+        # maximum Ta at sowing (sugar beet only)
+        self.ta_start_max = None
+        if is_tastart.any():
+            self.ta_start_max = float(crop_rows.loc[is_tastart, "Optimal"].iloc[0])
 
         self.setCropSpecificRule = True
-        self.data = crop_rows
-
+        self.data = crop_rows.loc[~(is_trend | is_tastart)].reset_index(drop=True)
         return None
 
     
@@ -1075,7 +1084,7 @@ class CropSimulation(object):
 
                 values = simulateCropCycleOneLocation(start_doy, end_doy, step_doy, leap_year, cycle_len_check_data, LAI_HI_data, climate_data,
                                     self.latitude[i,j], self.elevation[i,j], self.plant_height, self.set_Tsum_screening, self.LnS, self.LsO, self.LO, self.HnS, self.HsO, self.HO,
-                                    self.setCropSpecificRule, self.data, self.legume, self.adaptability,
+                                    self.setCropSpecificRule, self.data, self.legume, self.adaptability, (self.start_trend, self.ta_start_max),
                                     self.kc, self.d_per, Sa_temp, self.D1, self.D2, self.crop_group, self.yloss_f_all, self.yloss_f, 'I', self.crop_name)
                 self.final_yield_irrig[i,j] = values[0]
                 self.wde_irr[i,j] = values[1]
@@ -1161,7 +1170,7 @@ class CropSimulation(object):
 
                 values = simulateCropCycleOneLocation(start_doy, end_doy, step_doy, leap_year, cycle_len_check_data, LAI_HI_data, climate_data,
                                     self.latitude[i,j], self.elevation[i,j], self.plant_height, self.set_Tsum_screening, self.LnS, self.LsO, self.LO, self.HnS, self.HsO, self.HO,
-                                self.setCropSpecificRule, self.data, self.legume, self.adaptability,
+                                self.setCropSpecificRule, self.data, self.legume, self.adaptability, (self.start_trend, self.ta_start_max),
                                 self.kc, self.d_per, Sa_temp, self.D1, self.D2, self.crop_group, self.yloss_f_all, self.yloss_f, 'R', self.crop_name)
                 
                 self.final_yield_rain[i,j] = values[0]
@@ -1690,7 +1699,7 @@ def classifyFinalYield(est_yield):
 
 def simulateCropCycleOneLocation(start_doy:int, end_doy:int, step_doy:int, leap_year:bool, cycle_len_check_data, LAI_HI_data, climate_data,
                                     lat:float, elev:float, plant_height:float, set_TSUM_screening:bool, LnS:int, LsO:int, LO:int, HnS:int, HsO:int, HO:int,
-                                set_CropSpecificRule:bool, data, legume:int, adaptability:int,
+                                set_CropSpecificRule:bool, data, legume:int, adaptability:int, start_rule,
                                 kc, d_per, Sa, D1:float, D2:float, crop_group:int, yloss_f_all:float, yloss_f, irr_or_rain:str,crop_name:str):
     
     """NESTED FUNCTION: All simulation procedures are done for a single pixel location"""
@@ -1729,7 +1738,7 @@ def simulateCropCycleOneLocation(start_doy:int, end_doy:int, step_doy:int, leap_
     else:
         val = CropCycleLooping(start_doy, end_doy, step_doy, climate_data, lgpt0, lgpt5, lgpt10, min_temp_threshold, perennial_flg,
                         cycle_len, set_TSUM_screening, LnS, LsO, LO, HnS, HsO, HO, set_CropSpecificRule, data, 
-                        lat, LAi, HI, legume, adaptability, plant_height,
+                        lat, LAi, HI, legume, adaptability, plant_height, start_rule, 
                         kc, d_per, Sa, D1, D2, crop_group, yloss_f_all, yloss_f, irr_or_rain, leap_year, crop_name, hibernating_flag)
         
         final_yld, wde, eta, fc1, fc2, ccd = val[0], val[1], val[2], val[3], val[4], val[5] 
@@ -1741,7 +1750,7 @@ def simulateCropCycleOneLocation(start_doy:int, end_doy:int, step_doy:int, leap_
 
 def CropCycleLooping(start_doy:int, end_doy:int, step_doy:int, climate_data, lgpt0, lgpt5, lgpt10, min_T_threshold, perennial_flag:bool,
                      cycle_len:int, set_TSUM_screening:bool, LnS, LsO, LO, HnS, HsO, HO, set_CropSpecificRule:bool, data, 
-                     lat:float, lai:float, hi:float, legume:int, adaptability:int, plant_height:float,
+                     lat:float, lai:float, hi:float, legume:int, adaptability:int, plant_height:float, start_rule,
                      kc, d_per, Sa, D1:float, D2:float, crop_group:int, yloss_f_all:float, yloss_f, irr_or_rain:str, leap_year:bool,
                      crop_name:str,hibernation_flag:bool):
 
@@ -1770,6 +1779,11 @@ def CropCycleLooping(start_doy:int, end_doy:int, step_doy:int, climate_data, lgp
     fc1_arr= np.empty(0, dtype= float)
     fc2_arr= np.empty(0, dtype= float)
 
+    start_trend, ta_start_max = start_rule
+    if set_CropSpecificRule and start_trend is not None:
+        up = getTempTrend(mean_T[:365]) > 0      # mean_T is the doubled 730-day array
+        istup = np.concatenate((up, up))
+        
     for i_cycle in range(start_doy-1, end_doy, step_doy):
 
         cycle_yld:float = 0.
@@ -1788,6 +1802,17 @@ def CropCycleLooping(start_doy:int, end_doy:int, step_doy:int, climate_data, lgp
             fc2_arr = np.append(fc2_arr, 0.)
             continue
         
+        if set_CropSpecificRule and start_trend is not None:
+            wrong_phase = istup[i_cycle] != (start_trend > 0)
+            too_warm = ta_start_max is not None and mean_T[i_cycle] > ta_start_max
+            if wrong_phase or too_warm:
+                yd_arr = np.append(yd_arr, 0.)
+                wde_arr = np.append(wde_arr, 0.)
+                eta_arr = np.append(eta_arr, 0.)
+                fc1_arr = np.append(fc1_arr, 0.)
+                fc2_arr = np.append(fc2_arr, 0.)
+                continue
+                
         cycle_fc1 = 1.
         # Thermal Screening 
         if perennial_flag:

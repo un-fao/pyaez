@@ -279,7 +279,6 @@ def getSmoothTemp(temp1D):
 
     return interp1D
 
-
 def getTempTrend(temp1D):
     """
     Create a smoothened temperature curve of 365/366 days.
@@ -292,85 +291,96 @@ def getTempTrend(temp1D):
     -------
     Temperature Trend (1-D NumPy Array): Upward (+1)/ Downward (-1) trend data.
     """
-    # Calculation of Temp Profile for 1-D numpy array of climate data input
     interp1D = getInterpolatedTempData(temp1D)
+    n = interp1D.shape[0]
+    tmax0 = int(np.argmax(interp1D))   # 0-based
+    tmin0 = int(np.argmin(interp1D))
+
+    trend = -np.ones(n)
+    if tmax0 > tmin0:
+        trend[tmin0 + 1: tmax0 + 1] = 1
+    else:
+        trend[:tmax0 + 1] = 1
+        trend[tmin0 + 1:] = 1
+    return trend
     
-    # Detect the warmest and coldest day of year.
-    tmaxidx = np.argmax(interp1D)
-    tminidx= np.argmin(interp1D)
 
-    # Any days between the interval of warmest and coldest DOY will be decreasing trend
-    meanT_diff = np.ones(interp1D.shape)
-    meanT_diff[tmaxidx:tminidx] = -1
-
-    return meanT_diff
-
-def getTemperatureProfile(temp1D):
-    """
-    Calculation of temperature profile. The length of temperature data differs depend on 
-    crop type (annuals or perennials).
+def getTemperatureProfile(smooth1D, trend1D):
+    """Counts of days per temperature class, split by trend: [A0..A9, B0..B9]."""
+    bounds = np.array([35, 30, 25, 20, 15, 10, 5, 0, -5])
+    cls = (smooth1D[:, None] < bounds[None, :]).sum(axis=1)   # 0 = >=35 ... 9 = < -5
+    up = trend1D > 0
+    A = np.bincount(cls[up], minlength=10)
+    B = np.bincount(cls[~up], minlength=10)
+    return list(A) + list(B)
     
-    Parameters
-    ----------
-    temp1 (1-D NumPy Array): Input mean temperature (Deg C)
     
-    Returns
-    -------
-    None.
-    """
-    # Calculation of Temp Profile for 1-D numpy array of climate data input
-    interp1D = getInterpolatedTempData(temp1D)
-    
-    # Detect the warmest and coldest day of year.
-    tmaxidx = np.argmax(interp1D)
-    tminidx= np.argmin(interp1D)
-
-    # Any days between the interval of warmest and coldest DOY will be decreasing trend
-    meanT_diff = np.ones(interp1D.shape)
-    meanT_diff[tmaxidx:tminidx] = -1
-
-    # Allocating the temperature to the corresponding classes. New clases introduced (A0, B0)
-    A9 = np.sum(np.logical_and(meanT_diff > 0, interp1D < -5))
-    A8 = np.sum(np.logical_and(meanT_diff > 0, np.logical_and(
-        interp1D >= -5, interp1D < 0)))
-    A7 = np.sum(np.logical_and(meanT_diff > 0, np.logical_and(
-        interp1D >= 0, interp1D < 5)))
-    A6 = np.sum(np.logical_and(meanT_diff > 0, np.logical_and(
-        interp1D >= 5, interp1D < 10)))
-    A5 = np.sum(np.logical_and(meanT_diff > 0, np.logical_and(
-        interp1D >= 10, interp1D < 15)))
-    A4 = np.sum(np.logical_and(meanT_diff > 0, np.logical_and(
-        interp1D >= 15, interp1D < 20)))
-    A3 = np.sum(np.logical_and(meanT_diff > 0, np.logical_and(
-        interp1D >= 20, interp1D < 25)))
-    A2 = np.sum(np.logical_and(meanT_diff > 0, np.logical_and(
-        interp1D >= 25, interp1D < 30)))
-    A1 = np.sum(np.logical_and(meanT_diff > 0, interp1D >= 30, interp1D < 35))
-
-    A0 = np.sum(np.logical_and(meanT_diff >0, interp1D >=35))
-
-    B9 = np.sum(np.logical_and(meanT_diff < 0, interp1D < -5))
-    B8 = np.sum(np.logical_and(meanT_diff < 0, np.logical_and(
-        interp1D >= -5, interp1D < 0)))
-    B7 = np.sum(np.logical_and(meanT_diff < 0, np.logical_and(
-        interp1D >= 0, interp1D < 5)))
-    B6 = np.sum(np.logical_and(meanT_diff < 0, np.logical_and(
-        interp1D >= 5, interp1D < 10)))
-    B5 = np.sum(np.logical_and(meanT_diff < 0, np.logical_and(
-        interp1D >= 10, interp1D < 15)))
-    B4 = np.sum(np.logical_and(meanT_diff < 0, np.logical_and(
-        interp1D >= 15, interp1D < 20)))
-    B3 = np.sum(np.logical_and(meanT_diff < 0, np.logical_and(
-        interp1D >= 20, interp1D < 25)))
-    B2 = np.sum(np.logical_and(meanT_diff < 0, np.logical_and(
-        interp1D >= 25, interp1D < 30)))
-    B1 = np.sum(np.logical_and(meanT_diff < 0, interp1D >= 30, interp1D < 35))
-    B0 = np.sum(np.logical_and(meanT_diff <0, interp1D >=35))
-
-    # releasing memory
-    del (temp1D, interp1D, meanT_diff)
-
-    return [A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, B0, B1, B2, B3, B4, B5, B6, B7, B8, B9]
+#def getTemperatureProfile(temp1D):
+#    """
+#    Calculation of temperature profile. The length of temperature data differs depend on 
+#    crop type (annuals or perennials).
+#    
+#    Parameters
+#    ----------
+#    temp1 (1-D NumPy Array): Input mean temperature (Deg C)
+#    
+#    Returns
+#    -------
+#    None.
+#    """
+#    # Calculation of Temp Profile for 1-D numpy array of climate data input
+#    interp1D = getInterpolatedTempData(temp1D)
+#    
+#    # Detect the warmest and coldest day of year.
+#    tmaxidx = np.argmax(interp1D)
+#    tminidx= np.argmin(interp1D)
+#
+#    # Any days between the interval of warmest and coldest DOY will be decreasing trend
+#    meanT_diff = np.ones(interp1D.shape)
+#    meanT_diff[tmaxidx:tminidx] = -1
+#
+#    # Allocating the temperature to the corresponding classes. New clases introduced (A0, B0)
+#    A9 = np.sum(np.logical_and(meanT_diff > 0, interp1D < -5))
+#    A8 = np.sum(np.logical_and(meanT_diff > 0, np.logical_and(
+#        interp1D >= -5, interp1D < 0)))
+#    A7 = np.sum(np.logical_and(meanT_diff > 0, np.logical_and(
+#        interp1D >= 0, interp1D < 5)))
+#    A6 = np.sum(np.logical_and(meanT_diff > 0, np.logical_and(
+#        interp1D >= 5, interp1D < 10)))
+#    A5 = np.sum(np.logical_and(meanT_diff > 0, np.logical_and(
+#        interp1D >= 10, interp1D < 15)))
+#    A4 = np.sum(np.logical_and(meanT_diff > 0, np.logical_and(
+#        interp1D >= 15, interp1D < 20)))
+#    A3 = np.sum(np.logical_and(meanT_diff > 0, np.logical_and(
+#        interp1D >= 20, interp1D < 25)))
+#    A2 = np.sum(np.logical_and(meanT_diff > 0, np.logical_and(
+#        interp1D >= 25, interp1D < 30)))
+#    A1 = np.sum(np.logical_and(meanT_diff > 0, interp1D >= 30, interp1D < 35))
+#
+#    A0 = np.sum(np.logical_and(meanT_diff >0, interp1D >=35))
+#
+#    B9 = np.sum(np.logical_and(meanT_diff < 0, interp1D < -5))
+#    B8 = np.sum(np.logical_and(meanT_diff < 0, np.logical_and(
+#        interp1D >= -5, interp1D < 0)))
+#    B7 = np.sum(np.logical_and(meanT_diff < 0, np.logical_and(
+#        interp1D >= 0, interp1D < 5)))
+#    B6 = np.sum(np.logical_and(meanT_diff < 0, np.logical_and(
+#        interp1D >= 5, interp1D < 10)))
+#    B5 = np.sum(np.logical_and(meanT_diff < 0, np.logical_and(
+#        interp1D >= 10, interp1D < 15)))
+#    B4 = np.sum(np.logical_and(meanT_diff < 0, np.logical_and(
+#        interp1D >= 15, interp1D < 20)))
+#    B3 = np.sum(np.logical_and(meanT_diff < 0, np.logical_and(
+#        interp1D >= 20, interp1D < 25)))
+#    B2 = np.sum(np.logical_and(meanT_diff < 0, np.logical_and(
+#        interp1D >= 25, interp1D < 30)))
+#    B1 = np.sum(np.logical_and(meanT_diff < 0, interp1D >= 30, interp1D < 35))
+#    B0 = np.sum(np.logical_and(meanT_diff <0, interp1D >=35))
+#
+#    # releasing memory
+#    del (temp1D, interp1D, meanT_diff)
+#
+#    return [A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, B0, B1, B2, B3, B4, B5, B6, B7, B8, B9]
 
 
 def insertCropSpecificRuleParameters(data):
@@ -467,12 +477,21 @@ def calculateTemperatureProfileClasses(
     for i in range(len(Rule_data[4])):
         not_suitable.append(Rule_data[4][i])
 
-    tpro365 = getTemperatureProfile(input_temp)
-    trpocycle = getTemperatureProfile(
-        input_temp[i_cycle:i_cycle + cycle_len]
-    )
+    t365   = np.asarray(input_temp[:365])
+    smooth = getInterpolatedTempData(t365)
+    trend  = getTempTrend(t365)
+    smooth2 = np.concatenate((smooth, smooth))
+    trend2  = np.concatenate((trend, trend))
 
-    RHavg, RHmin, RHmax = getRHstats(input_RH)
+    tpro365   = getTemperatureProfile(smooth, trend)
+    trpocycle = getTemperatureProfile(smooth2[i_cycle:i_cycle + cycle_len],
+                                      trend2[i_cycle:i_cycle + cycle_len])
+    #tpro365 = getTemperatureProfile(input_temp)
+    #trpocycle = getTemperatureProfile(
+    #    input_temp[i_cycle:i_cycle + cycle_len]
+    #)
+
+    RHmin, RHmax, RHavg = getRHstats(input_RH)
 
     # ==========================================================
     # GAEZ RH thresholds are expressed in %
@@ -514,6 +533,9 @@ def calculateTemperatureProfileClasses(
     N8b = tpro365[18]
     N9b = tpro365[19]
 
+    N1a = N1a + N0a 
+    N1b = N1b + N0b
+    
     N0 = N0a + N0b
     N1 = N1a + N1b
     N2 = N2a + N2b
@@ -550,6 +572,9 @@ def calculateTemperatureProfileClasses(
     L7b = trpocycle[17]
     L8b = trpocycle[18]
     L9b = trpocycle[19]
+
+    L1a = L1a + L0a
+    L1b = L1b + L0b
 
     L0 = L0a + L0b
     L1 = L1a + L1b
