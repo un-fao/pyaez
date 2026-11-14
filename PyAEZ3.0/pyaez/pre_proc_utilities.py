@@ -862,7 +862,7 @@ def get_agro_climatic_constraints_array_full_appendices_M3(
     output_dir = Path("./data_input/input_module3")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    output_file = output_dir / f"M3_constraints_{crop_name}_{input_level}_{condition_type}.h5"
+    output_file = output_dir / f"M3_constraints_{crop_name}_{input_level}_{growing_length_period}_{condition_type}.h5"
 
     with pd.HDFStore(output_file) as store:
         for key, df in results.items():
