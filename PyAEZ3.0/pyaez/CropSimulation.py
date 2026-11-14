@@ -35,6 +35,29 @@ from pyaez.LGPCalc import RefWaterBalanceCalc, psh, rainPeak, islgpt, val10day, 
 
 np.round_ = np.round
 
+import ast, re
+
+_SUPPORTED = ({f"{p}{k}{s}" for p in "LN" for k in range(10) for s in ("", "a", "b")}
+              | {"CY", "CYb", "LGPT00", "LGPT05", "LGPT10", "RHavg", "RHmin", "RHmax"})
+_REPL = {"×": "*", "÷": "/", "−": "-", "≤": "<=", "≥": ">="}
+
+def _expr_ok(text):
+    s = str(text)
+    for a, b in _REPL.items():
+        s = s.replace(a, b)
+    s = re.sub(r"\s+", "", s)
+    if s.lower() in ("", "nan", "n.a.", "n.a", "na"):
+        return True
+    try:
+        float(s); return True
+    except ValueError:
+        pass
+    try:
+        tree = ast.parse(s, mode="eval")
+    except SyntaxError:
+        return False
+    return all(n.id in _SUPPORTED for n in ast.walk(tree) if isinstance(n, ast.Name))
+    
 class CropSimulation(object):
 
     def __init__(self):
@@ -849,7 +872,15 @@ class CropSimulation(object):
             self.ta_start_max = float(crop_rows.loc[is_tastart, "Optimal"].iloc[0])
 
         self.setCropSpecificRule = True
-        self.data = crop_rows.loc[~(is_trend | is_tastart)].reset_index(drop=True)
+        ok = crop_rows[["Constraint", "Optimal", "Sub-Optimal", "Not-Suitable"]].apply(
+                lambda col: col.map(_expr_ok)).all(axis=1)
+
+        skipped = crop_rows.loc[~ok & ~is_trend & ~is_tastart, "Constraint"].tolist()
+        if skipped:
+            print(f"[GAEZ] '{crop_name}': constraints not applied: {skipped}")
+
+        self.data = crop_rows.loc[ok].reset_index(drop=True)
+        
         return None
 
     
