@@ -224,7 +224,7 @@ class ClimaticConstraints(object):
             If the file cannot be opened or read.
         """
 
-        file_path = f"./data_input/input_module3/M3_constraints_{self.crop_name}_{self.input_level}_{condition_type}.h5"
+        file_path = f"./data_input/input_module3/M3_constraints_{self.crop_name}_{self.input_level}_{self.cycle_len}_{condition_type}.h5"
         
         # Reading and storing the saved file
         with pd.HDFStore(file_path) as store:
